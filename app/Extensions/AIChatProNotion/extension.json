@@ -1,0 +1,6 @@
+{
+    "name": "AI Chat Pro Notion Connector",
+    "type": "extension",
+    "version": "1.0",
+    "description": "Adds a Notion connector to AI Chat Pro so the AI can search and read the user's Notion workspace during conversations."
+}

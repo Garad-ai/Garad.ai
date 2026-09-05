@@ -1,0 +1,6 @@
+{
+    "name": "ChatbotCustomerTag",
+    "type": "extension",
+    "version": "1.0.0",
+    "description": "Customer tag management tools for chatbot conversations"
+}

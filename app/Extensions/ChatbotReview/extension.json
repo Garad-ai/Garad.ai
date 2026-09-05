@@ -1,0 +1,6 @@
+{
+    "name": "ChatbotReview",
+    "type": "extension",
+    "version": "1.0.0",
+    "description": "Adds review and feedback configuration to the Chatbot extension."
+}

@@ -1,0 +1,6 @@
+{
+    "name": "AI Chat Pro Google Calendar Connector",
+    "type": "extension",
+    "version": "1.0",
+    "description": "Adds a Google Calendar connector to AI Chat Pro so the AI can read the user's upcoming events during conversations."
+}

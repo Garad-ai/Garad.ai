@@ -1,0 +1,920 @@
+[
+	{
+		"themeName": "Pearl",
+		"themeId": "pearl",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/pearl/aa8343dc41b631429b9e1122ab51ee98f175c10f",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Vortex",
+		"themeId": "vortex",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/vortex/322f69e122a5ce6e60d53b9bf8332963f160bdfd",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(5, 5, 5);box-shadow: rgb(86, 81, 81) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Clementa",
+		"themeId": "clementa",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/clementa/fe37b91a68e619f9c470a6703ab5e4080347ed7e",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgba(255, 255, 244, 0.75);box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Stratos",
+		"themeId": "stratos",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/stratos/e1544f0269160d2360472c16289be9fe4a962103",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/a255a84fa3e84d54bcc267ea7c211183/original/bg-1-blueish.png@jpg",
+		"cardStyles": "background-color: rgba(16, 22, 32, 0.75);box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Nova",
+		"themeId": "nova",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/nova/a19203d8a2e4f8f3ddc08a73f34bf2ff0882fd0a",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/4417d168054a47188fca9b2d1111e198/original/Holo-Nova-Accent-Image-6.png@jpg",
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(255, 255, 255) 0px 0px 0px 4px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Twilight",
+		"themeId": "twilight",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/twilight/533b089223afb65643485bcf7e262bb3367a77b1",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/197c156f99624f39866b3b0a9e7563d2/original/Holo-Twilight-Accent-Image-5.png@jpg",
+		"cardStyles": "background-color: rgb(255, 250, 246);box-shadow: rgb(203, 207, 215) 0px 0px 0px 2px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Coral Glow",
+		"themeId": "coral-glow",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/coral-glow/601356d9c2783e7f810b74f418baf483d58d4242",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/dae885dbdbc04255b83e5dcf6285f555/original/sophiee.ga_httpss.mj.runXwZy2yPzpJg_Medium_Hyperrealistic_digit_5d931f42-b042-43f5-b58f-e6d8acd35d2a1.png@jpg",
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(255, 255, 255) 0px 0px 0px 2px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Mercury",
+		"themeId": "mercury",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/mercury/484646fdb9e73a7feac301e318968a0305b68713",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/599149eac25646cda6dbea033955ef1c/original/Holo-Mercury-Accent-Image-3.png@jpg",
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Ashrose",
+		"themeId": "ashrose",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/ashrose/9f69345f3e0ab8026e8cb442efb2963d0c31b795",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/c737c22c52584e519cdba98064523570/original/Muted.png@jpg",
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Spectrum",
+		"themeId": "spectrum",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/spectrum/94590856c73a92a8d5d3d6c97e39976c828d8038",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/3e066eca294041459127af5830eac242/original/Frame-30.png@jpg",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgb(255, 255, 255) 0px 0px 0px 1px, rgb(255, 255, 255) 6.4px 6.4px 0px 0px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 16px;"
+	},
+	{
+		"themeName": "Chisel",
+		"themeId": "chisel",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/chisel/053f84236400264eeb44614f5672b45c33df29a2",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Stardust",
+		"themeId": "stardust",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/stardust/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://images.unsplash.com/photo-1569470451072-68314f596aec?ixid=MnwxOTgwNzN8MHwxfHNlYXJjaHwxMXx8Z3JhZGllbnQlMjBibGFja3xlbnwxfHx8fDE2ODE4NTM1MTQ&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(3, 3, 3, 0.75);box-shadow: rgb(78, 78, 78) 0px 0px 0px 2px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Seafoam",
+		"themeId": "seafoam",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/seafoam/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Nebulae",
+		"themeId": "nebulae",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/nebulae/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/850811559c97448ea65b44195bbd69b2/original/blue-purpos.png@jpg",
+		"cardStyles": "background-color: rgb(7, 7, 12);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Creme",
+		"themeId": "creme",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/creme/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(249, 246, 240);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Lux",
+		"themeId": "lux",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/lux/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(18, 51, 50);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Consultant",
+		"themeId": "consultant",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/consultant/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Marine",
+		"themeId": "marine",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/marine/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(8, 14, 38);box-shadow: rgb(86, 81, 81) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Elysia",
+		"themeId": "elysia",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/elysia/cbe6635c60c16de4d8b74d75e119a56fdf4c29e7",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/gdwwhyewwldwc8z/c409d8d83980455ea5105c60248a4601/original/Abstract-Gradient-Art.png@jpg",
+		"cardStyles": "background-color: rgb(250, 245, 235);box-shadow: none;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Prism",
+		"themeId": "prism",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/prism/6a1abb0943cd3d143abd599eb8b750017480d806",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/prism-background.2232a16e.png?w=3707&q=70@jpg",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Lunaria",
+		"themeId": "lunaria",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/lunaria/cf5b42a7757f9d645d8687276b35595780884b6c",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(9, 14, 63);box-shadow: rgb(238, 174, 246) 8px 8px 0px 0px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Night Sky",
+		"themeId": "nightsky",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/nightsky/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/753fe4f09ed74e5cb8978c5dff4859f7/original/navy-bg-copy.png@jpg",
+		"cardStyles": "background-color: rgba(0, 0, 24, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Commons",
+		"themeId": "commons",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/commons/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Bonan Hale",
+		"themeId": "bonan-hale",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/bonan-hale/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(31, 31, 31);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Gamma",
+		"themeId": "gamma",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/gamma/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(253, 250, 247);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Gamma Dark",
+		"themeId": "gamma-dark",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/gamma-dark/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/aee87fc032764df3933f120b651bdfc3/original/Purple-bfg.png@jpg",
+		"cardStyles": "background-color: rgba(12, 5, 36, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Dialogue",
+		"themeId": "dialogue",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/dialogue/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Founder",
+		"themeId": "founder",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/founder/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(45, 49, 51);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Lavender",
+		"themeId": "lavender",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/lavender/null",
+		"hasValidAsset": false,
+		"themeType": "unknown",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(251, 250, 255);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Indigo",
+		"themeId": "urqsghgfv9ay2j0",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/urqsghgfv9ay2j0/null",
+		"hasValidAsset": false,
+		"themeType": "unknown",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(12, 10, 51);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Howlite",
+		"themeId": "howlite",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/howlite/f44ca5acd47046f2bc426afa88da4ec516fecd94",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Onyx",
+		"themeId": "onyx",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/onyx/ce2ebab7897aa3997db263a10c41947194b2d6b7",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(17, 18, 19);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Atmosphere",
+		"themeId": "atmosphere",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/atmosphere/f98323beaf691959e74b320753e56c6cd6f38ba4",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/atmosphere-background.a041341a.png?w=2666&q=70@jpg",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Blueberry ",
+		"themeId": "blueberry",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/blueberry/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(16, 12, 53);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Kraft ",
+		"themeId": "kraft",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/kraft/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(239, 236, 230);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Mystique ",
+		"themeId": "mystique",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/mystique/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(15, 15, 16);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Petrol",
+		"themeId": "petrol",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/petrol/ba175560ab98e27977f766707fa5996d550a4460",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 252, 245);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Blues",
+		"themeId": "blues",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/blues/706955f9e4e3ca38e77e56f460179ddaa87049dc",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": "https://images.unsplash.com/photo-1589306994259-a806e14b775a?ixid=M3wxOTgwNzN8MHwxfHNlYXJjaHw2Mnx8YmxhY2slMjBncmFkaWVudHxlbnwxfHx8fDE3MDA2Nzc3OTJ8MA&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(9, 21, 26, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Peach",
+		"themeId": "peach",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/peach/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/d4fac9260e974099ad0c298a28642c46/original/Tropics---background.png@jpg",
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Incandescent",
+		"themeId": "incandescent",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/incandescent/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(36, 22, 49);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Oatmeal",
+		"themeId": "oatmeal",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/oatmeal/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://images.unsplash.com/photo-1528731708534-816fe59f90cb?ixid=MnwxOTgwNzN8MHwxfHNlYXJjaHw0fHx3aGl0ZSUyMGdyYWRpZW50fGVufDF8fHx8MTY3NjkxMjMzNA&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Sanguine",
+		"themeId": "sanguine",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/sanguine/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://images.unsplash.com/photo-1648700231913-ad061d9b3ec9?ixid=MnwxOTgwNzN8MHwxfHNlYXJjaHwxMDN8fHJlZCUyMGdyYWRpZW50fGVufDF8fHx8MTY4MDgxNjE2NQ&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(10, 10, 10, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Sage",
+		"themeId": "sage",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/sage/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Verdigris",
+		"themeId": "verdigris",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/verdigris/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/d0f51a018ec24c81b90f74069c16bfb7/original/Frame-59718.png@jpg",
+		"cardStyles": "background-color: rgb(17, 40, 54);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Ash",
+		"themeId": "ash",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/ash/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(252, 252, 252);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Coal",
+		"themeId": "coal",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/coal/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(29, 29, 27);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Flamingo",
+		"themeId": "ag4mc9ggtxi8iyi",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/ag4mc9ggtxi8iyi/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn-staging.gamma.app/QWjS6fBfpt/7c4bcd24cd8940788fd9fb155d789d7f/original/mesh-noise-gradient.png@jpg",
+		"cardStyles": "background-color: rgb(255, 250, 250);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Canaveral",
+		"themeId": "canaveral",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/canaveral/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/canaveral-background.5dbf8d8ea7288ff1d7f1055cead80d9f.png@jpg",
+		"cardStyles": "background-color: rgba(25, 23, 24, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Oasis",
+		"themeId": "6igdxf9bbdbuozo",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/6igdxf9bbdbuozo/null",
+		"hasValidAsset": false,
+		"themeType": "unknown",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 248, 240);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Fluo",
+		"themeId": "fluo",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/fluo/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(33, 33, 33);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Finesse",
+		"themeId": "finesse",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/finesse/0b9268884a1fd17a60a394a2765073115ca6724f",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(254, 245, 231);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Electric",
+		"themeId": "electric",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/electric/94b81aeba684784911c0d6cd4715db7fbfaaaa48",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(37, 40, 51);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Zephyr",
+		"themeId": "zephyr",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/zephyr/1bda8c1fe5dce782d8a154ef80be1f371c16b94f",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/10ed29f32ee94e4b92352e1f62cd92d1/original/bg-blue.png@jpg",
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(117, 186, 230) 0px 0px 0px 2px, rgb(117, 186, 230) 8px 8px 0px 0px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Chimney Smoke",
+		"themeId": "chimney-smoke",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/chimney-smoke/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/928d7dc29162464485314bf32e225943/original/bg-light-gray.png@jpg",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Chimney Dust",
+		"themeId": "chimney-dust",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/chimney-dust/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/23e33c1791b042ada908a31f840e8951/original/bg-gray.png@jpg",
+		"cardStyles": "background-color: rgba(42, 42, 45, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Icebreaker",
+		"themeId": "icebreaker",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/icebreaker/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(251, 252, 254);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Blue Steel",
+		"themeId": "blue-steel",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/blue-steel/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(32, 39, 51);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Daydream",
+		"themeId": "daydream",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/daydream/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/daydream-background.7fcbd301bfcea3f5878fcd6e8d22502a.png@jpg",
+		"cardStyles": "background-color: rgba(243, 243, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 4px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Orbit",
+		"themeId": "orbit",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/orbit/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/orbit-background.f55cf66e62f5fb7b8c1e878071281aa3.png@jpg",
+		"cardStyles": "background-color: rgba(0, 0, 46, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 4px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Dune",
+		"themeId": "dune",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/dune/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://images.unsplash.com/photo-1555947289-0d851755094e?ixid=MnwxOTgwNzN8MHwxfHNlYXJjaHw3MXx8c29mdHxlbnwxfHx8fDE2NjE3OTQyNTQ&ixlib=rb-1.2.1&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgb(255, 253, 250);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Mocha",
+		"themeId": "i7l36r5v07hyz20",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/i7l36r5v07hyz20/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(70, 67, 66);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Serene",
+		"themeId": "serene",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/serene/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 250, 250);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Cornflower",
+		"themeId": "cornflower",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/cornflower/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(249, 249, 255);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Vanilla",
+		"themeId": "vanilla",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/vanilla/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 253, 230);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Alien",
+		"themeId": "alien",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/alien/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/f98b42d8e16844b0a93c848818d04ee3/original/no-star-3.png@jpg",
+		"cardStyles": "background-color: rgba(21, 32, 37, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Breeze",
+		"themeId": "breeze",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/breeze/40babb5c350d8ec5305768985988c9b29389c2db",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(187, 217, 245) 0px 0px 0px 1px, rgb(187, 217, 245) 6.4px 6.4px 0px 0px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Aurora",
+		"themeId": "aurora",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/aurora/66b17b153b1c7a26052c587d7dfb0294ef1ad12e",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/aurora-background.77ca5e0ff46d050807e8d907d1b774f8.png@jpg",
+		"cardStyles": "background-color: rgba(13, 10, 44, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Velvet Tides",
+		"themeId": "velvet-tides",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/velvet-tides/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://images.unsplash.com/photo-1654198340681-a2e0fc449f1b?ixid=MnwxOTgwNzN8MHwxfHNlYXJjaHwxNDZ8fGRhcmslMjBncmFkaWVudHxlbnwxfHx8fDE2NzUyMTQ4NDM&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(11, 12, 35, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Tranquil",
+		"themeId": "tranquil",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/tranquil/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://images.unsplash.com/photo-1464618663641-bbdd760ae84a?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=500&q=80",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Borealis",
+		"themeId": "borealis",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/borealis/1e62f0e41c5a012e5b4d7745b79e8a7b16102d3d",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/standard/348ee66ae9594e87a504c5013f2fa936/original/borealis.jpg@jpg",
+		"cardStyles": "background-color: rgba(10, 8, 27, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 4px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Terracotta",
+		"themeId": "terracotta",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/terracotta/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 252, 250);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Bubble Gum",
+		"themeId": "bubble-gum",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/bubble-gum/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(31, 31, 31);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Snowball",
+		"themeId": "snowball",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/snowball/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/snowball-bg-xskdx82l.jpg@jpg",
+		"cardStyles": "background-color: rgba(249, 249, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Pistachio",
+		"themeId": "pistachio",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/pistachio/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(250, 255, 250);box-shadow: rgb(74, 100, 78) 8px 8px 0px 0px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Piano",
+		"themeId": "piano",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/piano/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(243, 243, 247);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Atacama",
+		"themeId": "atacama",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/atacama/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/satellite-background.e070b8bc.jpg?w=2400&q=70@jpg",
+		"cardStyles": "background-color: rgba(37, 34, 34, 0.75);box-shadow: rgb(43, 40, 40) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Wireframe",
+		"themeId": "wireframe",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/wireframe/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(247, 247, 247);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Aurum",
+		"themeId": "aurum",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/aurum/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/f2d27220c12f419c8e9c0ebfb73e3b36/original/NY-bg-10-up.png@jpg",
+		"cardStyles": "background-color: rgb(27, 28, 29);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Bee Happy",
+		"themeId": "bee-happy",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/bee-happy/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(39, 39, 43);box-shadow: none;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Chocolate",
+		"themeId": "chocolate",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/chocolate/db46520d6239daf1bded4570852efe79ccacac09",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(64, 50, 52);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Cigar",
+		"themeId": "cigar",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/cigar/861fa1d722a01cbc0023db55304d7f34ad8b2ad9",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(33, 35, 38);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Cornfield",
+		"themeId": "cornfield",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/cornfield/4fe6cc0248254471c7bff4b170fa1c0da5fd100b",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(246, 235, 212);box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Daktilo",
+		"themeId": "daktilo",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/daktilo/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(248, 236, 228);box-shadow: rgb(21, 22, 23) 0px 0px 0px 1px, rgb(21, 22, 23) 6.4px 6.4px 0px 0px;backdrop-filter: none;border-radius: 1px;"
+	},
+	{
+		"themeName": "Dawn",
+		"themeId": "dawn",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/dawn/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(36, 36, 41);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Editoria",
+		"themeId": "editoria",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/editoria/b11aaf20ee8ca6db448b6a785bbae224fe626508",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(232, 232, 227);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Flax",
+		"themeId": "flax",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/flax/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(249, 248, 245);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Gleam",
+		"themeId": "gleam",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/gleam/ad8a5b84ed1f4d34e6315dda2b9c0b2f4defdf44",
+		"hasValidAsset": false,
+		"themeType": "unknown",
+		"bgImage": "https://images.unsplash.com/photo-1566041510639-8d95a2490bfb?ixid=M3wxOTgwNzN8MHwxfHNlYXJjaHwxN3x8d2hpdGUlMjBsaWdodHxlbnwxfHx8fDE3MDA2ODU4OTB8MA&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Gold Leaf",
+		"themeId": "gold-leaf",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/gold-leaf/07897491194d75694b2f41c888098b6309edf58f",
+		"hasValidAsset": false,
+		"themeType": "unknown",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/zc87vhr30n8uf3n/8e42af552dd64357a8f7b416c1162eb9/original/malloops_A_pattern_of_white_and_gold_liquid_swirls_on_an_all-wh_cd39af0e-78fa-4e88-ad40-d7cc51f267c4.png@jpg",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgb(223, 182, 121) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Iris",
+		"themeId": "iris",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/iris/4d1120f399563b6b3639b224e6789ab4e7a4c196",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://imgproxy.gamma.app/resize/quality:80/resizing_type:fit/width:500/height:500/https://cdn.gamma.app/theme_images/standard/4ed03aaa0f72423d9daf5d2c7feaa61b/original/photo-1635776063328-153b13e3c245.jpeg@jpg",
+		"cardStyles": "background-color: rgba(250, 250, 250, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Keepsake",
+		"themeId": "keepsake",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/keepsake/56ef97343e7d2a78fd9337320aec2eb4bc2dc989",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(250, 249, 245);box-shadow: none;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Leimoon",
+		"themeId": "leimoon",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/leimoon/bb0b2d33ba5b325f2cde4a915cfaa145b4184b86",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: none;backdrop-filter: none;border-radius: 16px;"
+	},
+	{
+		"themeName": "Linen",
+		"themeId": "linen",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/linen/7cf0f66bbb8050dfa02ee36f8f689427d4636c18",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(253, 251, 247);box-shadow: rgb(205, 196, 184) 0px 0px 0px 2px, rgb(205, 196, 184) 8px 8px 0px 0px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Malibu",
+		"themeId": "malibu",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/malibu/b0f90c1a4dee1dcc27e750ae6db984a753aaf81f",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://images.unsplash.com/photo-1614283180581-d5988fd52837?ixid=M3wxOTgwNzN8MHwxfHNlYXJjaHwzfHxwaW5rJTIwZ3JhZGllbnR8ZW58MXx8fHwxNjg1OTg2OTE0fDA&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(255, 255, 255, 0.75);box-shadow: rgba(230, 230, 230, 0.75) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Moss & Mist",
+		"themeId": "moss-and-mist",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/moss-and-mist/eb6f07dce5d011cd9637d66b58f8aeb31aa9d93b",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(28, 29, 31);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Plant Shop",
+		"themeId": "plant-shop",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/plant-shop/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(252, 251, 248);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Rush",
+		"themeId": "rush",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/rush/dfe8d01bbc29177307ea81e704e031e936f849a9",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://images.unsplash.com/photo-1645811791249-93a1e10d0169?ixid=M3wxOTgwNzN8MHwxfHNlYXJjaHw0Nnx8cmVkJTIwZ3JhZGllbnR8ZW58MXx8fHwxNzQ0ODA2OTA5fDA&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Shadow",
+		"themeId": "shadow",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/shadow/293acdc1576b2e1ec3fff86c934509432d13bf8e",
+		"hasValidAsset": true,
+		"themeType": "dark",
+		"bgImage": "https://images.unsplash.com/photo-1671159593326-80a2c134fc6a?ixid=M3wxOTgwNzN8MHwxfHNlYXJjaHw3Nnx8Z3JheSUyMGdyYWRpZW50fGVufDF8fHx8MTY4NDk1NjY2OXww&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(24, 22, 22, 0.75);box-shadow: rgba(230, 230, 230, 0.25) 0px 0px 0px 1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Slate",
+		"themeId": "slate",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/slate/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(41, 44, 50);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Sprout",
+		"themeId": "sprout",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/sprout/4a6f4f38d12e20dff9274913c03d6dcc31eccb08",
+		"hasValidAsset": true,
+		"themeType": "light",
+		"bgImage": "https://images.unsplash.com/photo-1589035110932-0c3e4e8869cf?ixid=M3wxOTgwNzN8MHwxfHNlYXJjaHw1fHxsaWdodCUyMGdyZWVufGVufDF8fHx8MTc0NTI5MDcyN3ww&ixlib=rb-4.0.3&w=500&q=25&auto=format",
+		"cardStyles": "background-color: rgba(229, 249, 242, 0.75);box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: blur(20px) saturate(1.7);border-radius: 16px;"
+	},
+	{
+		"themeName": "Wine",
+		"themeId": "wine",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/wine/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(92, 36, 56);box-shadow: none;backdrop-filter: none;border-radius: 2px;"
+	},
+	{
+		"themeName": "Basic Light",
+		"themeId": "default-light",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/default-light/null",
+		"hasValidAsset": false,
+		"themeType": "light",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(255, 255, 255);box-shadow: rgb(229, 224, 223) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	},
+	{
+		"themeName": "Basic Dark",
+		"themeId": "default-dark",
+		"previewImage": "https://assets.api.gamma.app/themes/preview/v1/default-dark/null",
+		"hasValidAsset": false,
+		"themeType": "dark",
+		"bgImage": null,
+		"cardStyles": "background-color: rgb(39, 37, 37);box-shadow: rgb(86, 81, 81) 0px 0px 0px 1px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;backdrop-filter: none;border-radius: 9.6px;"
+	}
+]

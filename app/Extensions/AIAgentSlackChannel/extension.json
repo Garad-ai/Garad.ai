@@ -1,0 +1,6 @@
+{
+  "name": "AI Agent: Slack Channel",
+  "type": "extension",
+  "version": "1.0",
+  "description": "Adds Slack channel support to AI Agent via Slack Web API. Requires the AI Agent extension."
+}

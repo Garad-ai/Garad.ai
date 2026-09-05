@@ -1,0 +1,8 @@
+{
+	"name": "modern",
+	"extends": "default",
+	"asset-path": "themes\/modern",
+	"landingPage": {
+		"googleFonts": {}
+	}
+}

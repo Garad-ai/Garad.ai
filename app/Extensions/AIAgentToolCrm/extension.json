@@ -1,0 +1,6 @@
+{
+    "name": "AI Agent Tool: CRM",
+    "type": "extension",
+    "version": "1.0",
+    "description": "Bridges AI Agent and CRM: list/create contacts, companies and deals, move pipeline stages, create tasks and notes, and fetch pipeline analytics inside AI Agent workflows."
+}

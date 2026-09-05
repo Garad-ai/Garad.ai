@@ -1,0 +1,6 @@
+{
+    "name": "AI Chat Pro Gmail Connector",
+    "type": "extension",
+    "version": "1.0",
+    "description": "Adds a Gmail connector to AI Chat Pro so the AI can search and read the user's Gmail during conversations."
+}

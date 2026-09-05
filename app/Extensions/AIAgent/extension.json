@@ -1,0 +1,6 @@
+{
+  "name": "AI Agent",
+  "type": "extension",
+  "version": "1.2",
+  "description": "Autonomous AI agent with multi-channel messaging, workflow automation, and user memory"
+}

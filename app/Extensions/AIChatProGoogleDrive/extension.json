@@ -1,0 +1,6 @@
+{
+    "name": "AI Chat Pro Google Drive Connector",
+    "type": "extension",
+    "version": "1.0",
+    "description": "Adds a Google Drive connector to AI Chat Pro so the AI can search and read the user's Drive files during conversations."
+}

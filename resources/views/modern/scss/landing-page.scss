@@ -1,0 +1,143 @@
+@import '../../default/scss/landing-page.scss';
+
+@font-face {
+	font-family: 'Geist';
+	src: url(@themeAssets/modern/assets/fonts/GeistVF.woff2) format('woff2-variations');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@layer base {
+
+	:root {
+		--background: 0 0% 100%;
+		--foreground: 214 22% 37%;
+		--primary: 230 100% 72%;
+		--primary-foreground: 0 0 100%;
+		--gradient-from: 201 31% 57%;
+		--gradient-via: 230 100% 72%;
+		--gradient-to: 176 47% 51%;
+		--border: 200 12% 95%;
+		--heading-foreground: 0 0% 17%;
+		--heading-background: 0 0% 100%;
+
+		--font-body: 'Geist';
+		--font-heading: 'Geist';
+
+		--h1-font-size: 4.5625rem; // 73px
+		--h1-line-height: 1em;
+		--h1-font-weight: 700;
+		--h1-letter-spacing: -0.05em;
+
+		--h2-font-size: 3.4375rem; // 55px
+		--h2-line-height: 1em;
+		--h2-font-weight: 600;
+		--h2-letter-spacing: -0.04em;
+
+		--h3-font-size: 2.125rem; // 34px
+		--h3-line-height: 1em;
+		--h3-font-weight: 600;
+		--h3-letter-spacing: -0.03em;
+
+		--h4-font-size: 1.1875; // 19px
+		--h4-line-height: 1.21m;
+		--h4-font-weight: 600;
+		--h4-letter-spacing: -0.001em;
+
+		--h5-font-size: 1.125rem; // 18px
+		--h5-line-height: 1em;
+		--h5-font-weight: 600;
+
+		--h6-font-size: 0.75rem;
+		--h6-line-height: 1em;
+		--h6-font-weight: 600;
+	}
+
+	body {
+		font-size: 1rem;
+		line-height: 1.5em;
+	}
+}
+
+@layer components {
+
+	.lqd-template-item,
+	.lqd-feature-box {
+
+		svg {
+
+			&:not([fill=none]) {
+				fill: url(#icons-gradient);
+			}
+			&:not([stroke=none]):not([fill*='#']):not([fill=currentColor]) {
+				stroke: url(#icons-gradient);
+			}
+		}
+		path[fill]:not([fill=none]) {
+			@apply fill-inherit;
+		}
+	}
+}
+
+@layer utilities {
+
+	@keyframes repeating-gradient-move {
+		from {
+			translate: 0;
+		}
+		to {
+			translate: -50%;
+		}
+	}
+
+	.text-gradient {
+		@apply bg-gradient-to-r bg-clip-text text-transparent from-gradient-from from-10% via-gradient-via to-gradient-to to-80%;
+	}
+	.bg-gradient {
+		@apply bg-gradient-to-r from-gradient-from from-10% via-gradient-via to-gradient-to to-80%;
+	}
+	.bg-gradient-fade {
+		@apply bg-gradient-to-r from-gradient-from/50 from-10% via-gradient-via/50 to-gradient-to/50 to-80%;
+	}
+	.repeating-gradient {
+		mask-image: linear-gradient(to right, transparent, black 30%, black 70%, transparent);
+	}
+	.repeating-gradient-overlay,
+	.repeating-gradient-lines {
+		mask-image: linear-gradient(to top, transparent, black 40%);
+	}
+	.repeating-gradient-lines {
+		background: repeating-linear-gradient(to right, transparent, transparent 2px, white 2px, white 4px);
+		// animation: repeating-gradient-move 2s linear infinite;
+	}
+	.text-header-p {
+		color: #666;
+	}
+	mark {
+		@apply inline-block px-1 py-px mx-0.5 rounded bg-primary text-primary-foreground;
+	}
+}
+
+.blog-content,
+.page-content  {
+	@apply text-heading-foreground/70;
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		@apply text-heading-foreground;
+	}
+}
+
+@media (max-width: 520px) {
+
+	:root {
+		--h1-font-size: 3.3rem;
+
+		--h2-font-size: 3rem;
+	}
+}

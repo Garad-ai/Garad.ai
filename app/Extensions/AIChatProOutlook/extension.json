@@ -1,0 +1,6 @@
+{
+    "name": "AI Chat Pro Outlook Connector",
+    "type": "extension",
+    "version": "1.0",
+    "description": "Adds an Outlook connector to AI Chat Pro so the AI can search and read the user's Outlook mail during conversations."
+}

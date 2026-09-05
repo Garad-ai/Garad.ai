@@ -1,0 +1,125 @@
+{
+	"styles": [
+		{
+			"styleId": "add-reference",
+			"styleName": "Add Style Reference",
+			"category": "Impressions",
+			"previewImage": "",
+			"isAddCard": true
+		},
+		{
+			"styleId": "oil-painting",
+			"styleName": "Oil Painting",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/1.jpg"
+		},
+		{
+			"styleId": "black-white",
+			"styleName": "Black and White",
+			"category": "Noir",
+			"previewImage": "/vendor/ai-image-pro/images/2.jpg"
+		},
+		{
+			"styleId": "gaming",
+			"styleName": "Gaming",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/17.jpg"
+		},
+		{
+			"styleId": "3d-render",
+			"styleName": "3D Render",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/4.jpg"
+		},
+		{
+			"styleId": "photorealistic",
+			"styleName": "Photorealistic",
+			"category": "Professional Photography",
+			"previewImage": "/vendor/ai-image-pro/images/15.jpg"
+		},
+		{
+			"styleId": "hand-drawn",
+			"styleName": "Hand Drawn",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/10.jpg"
+		},
+		{
+			"styleId": "anime",
+			"styleName": "Anime",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/14.jpg"
+		},
+		{
+			"styleId": "editorial",
+			"styleName": "Editorial",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/5.jpg"
+		},
+		{
+			"styleId": "minimal-photoshoot",
+			"styleName": "Minimal Photoshoot",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/9.jpg"
+		},
+		{
+			"styleId": "cinematic",
+			"styleName": "Cinematic",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/18.jpg"
+		},
+		{
+			"styleId": "sci-fi",
+			"styleName": "Sci-Fi",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/16.jpg"
+		},
+		{
+			"styleId": "digital-painting",
+			"styleName": "Digital Painting",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/7.jpg"
+		},
+		{
+			"styleId": "pixel-art",
+			"styleName": "Pixel Art",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/8.jpg"
+		},
+		{
+			"styleId": "analog-camera",
+			"styleName": "Analog Camera",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/13.jpg"
+		},
+		{
+			"styleId": "classic-art",
+			"styleName": "Classic Art",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/6.jpg"
+		},
+		{
+			"styleId": "cartoonify",
+			"styleName": "Cartoonify",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/19.jpg"
+		},
+		{
+			"styleId": "cyberpunk",
+			"styleName": "Cyberpunk",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/12.jpg"
+		},
+		{
+			"styleId": "fantasy",
+			"styleName": "Fantasy",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/3.jpg"
+		},
+		{
+			"styleId": "3d-character",
+			"styleName": "3D Character",
+			"category": "Impressions",
+			"previewImage": "/vendor/ai-image-pro/images/11.jpg"
+		}
+	]
+}

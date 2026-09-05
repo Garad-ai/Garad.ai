@@ -1,0 +1,6 @@
+{
+  "name": "AI Agent: WhatsApp Channel",
+  "type": "extension",
+  "version": "1.0",
+  "description": "Adds WhatsApp channel support to AI Agent via Meta Cloud API. Requires the AI Agent extension."
+}

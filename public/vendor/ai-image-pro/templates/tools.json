@@ -1,0 +1,198 @@
+[
+	{
+		"id": 1,
+		"name": "Product Placement",
+		"category": "Product Photography",
+		"preview": "/vendor/ai-image-pro/templates/images/product-placement.jpg",
+		"data": {
+			"prompt_template": "Edit the image to seamlessly place and integrate the product into the scene. The model in the image should be naturally holding or interacting with the product. {scene} Professional product photography with studio lighting, commercial grade quality, realistic product integration.",
+			"prompt_defaults": {
+				"scene": "Make the product placement look natural and professional."
+			},
+			"inputs": [
+				{
+					"label": "Product Image",
+					"key": "product_image",
+					"type": "file",
+					"required": true,
+					"accept": "image/*"
+				},
+				{
+					"label": "Model Image",
+					"key": "model_image",
+					"type": "file",
+					"required": true,
+					"accept": "image/*"
+				},
+				{
+					"label": "Scene (Optional)",
+					"key": "scene",
+					"type": "textarea",
+					"placeholder": "Describe how you want the product to be showcased with the model.",
+					"required": false,
+					"rows": 3,
+					"ai-enhance": true
+				},
+				{
+					"label": "Ratio",
+					"key": "ratio",
+					"type": "select",
+					"options": [
+						{ "label": "1:1", "value": "1:1", "selected": true },
+						{ "label": "21:9", "value": "21:9" },
+						{ "label": "16:9", "value": "16:9" },
+						{ "label": "3:2", "value": "3:2" },
+						{ "label": "4:3", "value": "4:3" },
+						{ "label": "5:4", "value": "5:4" },
+						{ "label": "4:5", "value": "4:5" },
+						{ "label": "3:4", "value": "3:4" },
+						{ "label": "2:3", "value": "2:3" },
+						{ "label": "9:16", "value": "9:16" }
+					],
+					"required": true
+				}
+			]
+		}
+	},
+	{
+		"id": 2,
+		"name": "Professional Avatar",
+		"category": "Social Media",
+		"preview": "/vendor/ai-image-pro/templates/images/professional-avatar.jpg",
+		"data": {
+			"prompt_template": "Transform this photo into a professional {style} portrait. Keep the same person's face and likeness but enhance with professional studio lighting, clean solid background, sharp focus, high quality headshot suitable for LinkedIn or business profile. Make the person look polished and professional while maintaining their identity.",
+			"prompt_defaults": {
+				"style": "formal"
+			},
+			"inputs": [
+				{
+					"label": "Your Photo",
+					"key": "user_photo",
+					"type": "file",
+					"required": true,
+					"accept": "image/*"
+				},
+				{
+					"label": "Outfit",
+					"key": "style",
+					"type": "select",
+					"options": [
+						{
+							"label": "Formal",
+							"value": "formal",
+							"selected": true
+						},
+						{
+							"label": "Casual",
+							"value": "casual"
+						}
+					],
+					"required": true
+				},
+				{
+					"label": "Ratio",
+					"key": "ratio",
+					"type": "select",
+					"options": [
+						{ "label": "1:1", "value": "1:1", "selected": true },
+						{ "label": "21:9", "value": "21:9" },
+						{ "label": "16:9", "value": "16:9" },
+						{ "label": "3:2", "value": "3:2" },
+						{ "label": "4:3", "value": "4:3" },
+						{ "label": "5:4", "value": "5:4" },
+						{ "label": "4:5", "value": "4:5" },
+						{ "label": "3:4", "value": "3:4" },
+						{ "label": "2:3", "value": "2:3" },
+						{ "label": "9:16", "value": "9:16" }
+					],
+					"required": true
+				}
+			]
+		}
+	},
+	{
+		"id": 3,
+		"name": "Product Photography",
+		"category": "Product Photography",
+		"preview": "/vendor/ai-image-pro/templates/images/ecommerce-product-photo.jpg",
+		"data": {
+			"prompt_template": "Professional product photography: {scene}. Studio lighting, commercial quality, sharp focus, clean composition.",
+			"inputs": [
+				{
+					"label": "Product Image",
+					"key": "product_image",
+					"type": "file",
+					"required": true,
+					"accept": "image/*"
+				},
+				{
+					"label": "Scene",
+					"key": "scene",
+					"type": "textarea",
+					"placeholder": "Describe the scene where you want your product to be showcased.",
+					"required": true,
+					"rows": 3,
+					"ai-enhance": true
+				},
+				{
+					"label": "Ratio",
+					"key": "ratio",
+					"type": "select",
+					"options": [
+						{ "label": "1:1", "value": "1:1", "selected": true },
+						{ "label": "21:9", "value": "21:9" },
+						{ "label": "16:9", "value": "16:9" },
+						{ "label": "3:2", "value": "3:2" },
+						{ "label": "4:3", "value": "4:3" },
+						{ "label": "5:4", "value": "5:4" },
+						{ "label": "4:5", "value": "4:5" },
+						{ "label": "3:4", "value": "3:4" },
+						{ "label": "2:3", "value": "2:3" },
+						{ "label": "9:16", "value": "9:16" }
+					],
+					"required": true
+				}
+			]
+		}
+	},
+	{
+		"id": 4,
+		"name": "Youtube Thumbnail",
+		"category": "Social Media",
+		"preview": "/vendor/ai-image-pro/templates/images/youtube-thumbnail2.jpg",
+		"data": {
+			"prompt_template": "Create a YouTube thumbnail image for {content_type}. {details}. Design must be eye-catching with bold vibrant colors, high contrast, attention-grabbing composition. Professional YouTube thumbnail design with clear focal point, suitable for 1280x720 display.",
+			"prompt_defaults": {
+				"content_type": "video",
+				"details": ""
+			},
+			"fixed_ratio": "16:9",
+			"inputs": [
+				{
+					"label": "Content Type",
+					"key": "content_type",
+					"type": "textarea",
+					"rows": 1,
+					"placeholder": "E.g., Tech Review, Travel Vlog, Cooking Tutorial",
+					"required": true
+				},
+				{
+					"label": "Details",
+					"key": "details",
+					"type": "textarea",
+					"placeholder": "Provide specific details or elements you want in the thumbnail.",
+					"required": true,
+					"rows": 3,
+					"ai-enhance": true
+				},
+				{
+					"label": "Reference Image (Optional)",
+					"key": "reference_image",
+					"type": "file",
+					"required": false,
+					"accept": "image/*"
+				}
+			]
+		}
+	}
+]

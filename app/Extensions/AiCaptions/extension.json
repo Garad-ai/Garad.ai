@@ -1,0 +1,6 @@
+{
+    "name": "AI Captions",
+    "type": "extension",
+    "version": "1.2",
+    "description": "AI Captions extension for magicai — automatically add stylized animated captions to videos via the Captions API."
+}
