@@ -64,6 +64,11 @@ API base URL.
 Frontend media in `frontend/src/assets/` is tracked directly in Git. It does not
 require Git LFS or a separate asset download.
 
+Selected default theme images, Garad AI brand marks, provider logos, and
+premium-support media under `public/upload/` are also tracked because Laravel
+views use them at runtime. User uploads and generated media under
+`public/uploads/` remain local runtime data and are not included.
+
 The Laravel route `/agents` serves Chat Pro from its generated build and
 injects the authenticated API URL. Do not create a physical
 `public/agents` directory; it would shadow that route.
