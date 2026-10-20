@@ -5,12 +5,16 @@ namespace App\Extensions\SocialMedia\System\Http\Controllers\Oauth;
 use App\Extensions\SocialMedia\System\Enums\PlatformEnum;
 use App\Extensions\SocialMedia\System\Helpers\Youtube;
 use App\Extensions\SocialMedia\System\Http\Controllers\Oauth\Traits\HasBackRoute;
+use App\Extensions\SocialMedia\System\Models\SocialMediaPost;
+use App\Extensions\SocialMedia\System\Models\SocialMediaPostDailyMetric;
 use App\Extensions\SocialMedia\System\Models\SocialMediaPlatform;
 use App\Helpers\Classes\Helper;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -141,40 +145,69 @@ class YoutubeController extends Controller
             $credentialsPayload['refresh_token_expire_at'] = now()->addMonths(6);
         }
 
-        if ($platformIdFromCache && is_numeric($platformIdFromCache)) {
-            $existing = SocialMediaPlatform::query()
-                ->where('user_id', Auth::id())
+        $userId = (int) Auth::id();
+        $matchingAccounts = $channelId
+            ? SocialMediaPlatform::query()
+                ->where('user_id', $userId)
                 ->where('platform', $platform->value)
-                ->where('id', $platformIdFromCache)
-                ->first();
+                ->get()
+                ->filter(function (SocialMediaPlatform $account) use ($channelId): bool {
+                    $credentials = (array) $account->credentials;
 
-            if ($existing) {
-                $existingCredentials = $existing->credentials ?? [];
+                    return (string) ($credentials['channel_id'] ?? $credentials['platform_id'] ?? '') === (string) $channelId;
+                })
+                ->sortBy('id')
+                ->values()
+            : collect();
 
-                if (empty($credentialsPayload['refresh_token']) && isset($existingCredentials['refresh_token'])) {
-                    $credentialsPayload['refresh_token'] = $existingCredentials['refresh_token'];
-                    $credentialsPayload['refresh_token_expire_at'] = $existingCredentials['refresh_token_expire_at'] ?? null;
-                }
+        $existing = $matchingAccounts->firstWhere('id', (int) $platformIdFromCache)
+            ?? $matchingAccounts->first();
 
-                $existing->update([
-                    'credentials'     => array_merge($existingCredentials, array_filter($credentialsPayload, fn ($value) => $value !== null)),
-                    'connected_at'    => now(),
-                    'expires_at'      => $expiresAt,
-                    'followers_count' => $followersCount,
-                ]);
+        if (! $existing) {
+            SocialMediaPlatform::query()->create([
+                'user_id'         => $userId,
+                'platform'        => $platform->value,
+                'credentials'     => array_filter($credentialsPayload, fn ($value) => $value !== null),
+                'connected_at'    => now(),
+                'expires_at'      => $expiresAt,
+                'followers_count' => $followersCount,
+            ]);
 
-                return;
-            }
+            return;
         }
 
-        SocialMediaPlatform::query()->create([
-            'user_id'         => Auth::id(),
-            'platform'        => $platform->value,
-            'credentials'     => array_filter($credentialsPayload, fn ($value) => $value !== null),
-            'connected_at'    => now(),
-            'expires_at'      => $expiresAt,
-            'followers_count' => $followersCount,
-        ]);
+        $existingCredentials = (array) $existing->credentials;
+        if (empty($credentialsPayload['refresh_token']) && isset($existingCredentials['refresh_token'])) {
+            $credentialsPayload['refresh_token'] = $existingCredentials['refresh_token'];
+            $credentialsPayload['refresh_token_expire_at'] = $existingCredentials['refresh_token_expire_at'] ?? null;
+        }
+
+        DB::transaction(function () use ($existing, $matchingAccounts, $credentialsPayload, $expiresAt, $followersCount): void {
+            $existing->update([
+                'credentials'     => array_merge($existing->credentials ?? [], array_filter($credentialsPayload, fn ($value) => $value !== null)),
+                'connected_at'    => now(),
+                'expires_at'      => $expiresAt,
+                'followers_count' => $followersCount,
+            ]);
+
+            $duplicateIds = $matchingAccounts
+                ->reject(fn (SocialMediaPlatform $account) => $account->is($existing))
+                ->modelKeys();
+
+            if ($duplicateIds === []) {
+                return;
+            }
+
+            SocialMediaPost::query()->whereIn('social_media_platform_id', $duplicateIds)
+                ->update(['social_media_platform_id' => $existing->id]);
+
+            if (Schema::hasTable('ext_social_media_post_daily_metrics')) {
+                SocialMediaPostDailyMetric::query()->whereIn('social_media_platform_id', $duplicateIds)
+                    ->update(['social_media_platform_id' => $existing->id]);
+            }
+
+            SocialMediaPlatform::query()->whereIn('id', $duplicateIds)->delete();
+        });
     }
 
     private function platformCacheKey(PlatformEnum $platform): string

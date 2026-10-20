@@ -15,6 +15,10 @@ class GeminiService
 
     public array $tools = [];
 
+    public array $toolConfig = [];
+
+    public array $generationConfig = [];
+
     public const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
     public function streamGenerateContent($entity = EntityEnum::GEMINI_3_FLASH->value): PromiseInterface|Response
@@ -25,11 +29,21 @@ class GeminiService
         $body = [
             'contents' => $this->getHistory(),
         ];
+        if ($this->generationConfig !== []) {
+            $body['generationConfig'] = $this->generationConfig;
+        } elseif (request()?->attributes->has('garad_provider_request_max')) {
+            $body['generationConfig'] = [
+                'maxOutputTokens' => \App\Services\Ai\ProviderRequestBudgetService::MAX_OUTPUT_TOKENS,
+            ];
+        }
 
         if (! empty($this->tools)) {
             $body['tools'] = $this->tools;
-            $body['toolConfig'] = ['functionCallingConfig' => ['mode' => 'AUTO']];
+            $body['toolConfig'] = $this->toolConfig ?: ['functionCallingConfig' => ['mode' => 'AUTO']];
         }
+        $budget = app(\App\Services\Ai\ProviderRequestBudgetService::class);
+        $body = $budget->preparePayload($body);
+        $budget->recordProviderRequest();
 
         $url = sprintf('%s%s:streamGenerateContent?key=%s', self::ENDPOINT, $entity, config('gemini.api_key'));
 
@@ -44,11 +58,21 @@ class GeminiService
         $body = [
             'contents' => $this->getHistory(),
         ];
+        if ($this->generationConfig !== []) {
+            $body['generationConfig'] = $this->generationConfig;
+        } elseif (request()?->attributes->has('garad_provider_request_max')) {
+            $body['generationConfig'] = [
+                'maxOutputTokens' => \App\Services\Ai\ProviderRequestBudgetService::MAX_OUTPUT_TOKENS,
+            ];
+        }
 
         if (! empty($this->tools)) {
             $body['tools'] = $this->tools;
-            $body['toolConfig'] = ['functionCallingConfig' => ['mode' => 'AUTO']];
+            $body['toolConfig'] = $this->toolConfig ?: ['functionCallingConfig' => ['mode' => 'AUTO']];
         }
+        $budget = app(\App\Services\Ai\ProviderRequestBudgetService::class);
+        $body = $budget->preparePayload($body);
+        $budget->recordProviderRequest();
 
         $url = sprintf('%s%s:generateContent?key=%s', self::ENDPOINT, $entity, config('gemini.api_key'));
 
@@ -126,6 +150,20 @@ class GeminiService
     public function setTools(array $tools): self
     {
         $this->tools = $tools;
+
+        return $this;
+    }
+
+    public function setToolConfig(array $toolConfig): self
+    {
+        $this->toolConfig = $toolConfig;
+
+        return $this;
+    }
+
+    public function setGenerationConfig(array $generationConfig): self
+    {
+        $this->generationConfig = $generationConfig;
 
         return $this;
     }

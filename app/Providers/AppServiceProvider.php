@@ -27,6 +27,7 @@ use App\Services\MemoryLimit;
 use App\Services\UGCStudio\UGCSourceRegistry;
 use Igaster\LaravelTheme\Facades\Theme;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -49,6 +50,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Auth::guard('web')->setRememberDuration((int) config('session.lifetime'));
+
         $this->forceSchemeHttps();
 
         $this->app->useLangPath(base_path('lang'));

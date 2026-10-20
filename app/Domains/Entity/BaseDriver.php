@@ -45,6 +45,10 @@ abstract class BaseDriver implements EntityDriverInterface, WithCalculate, WithC
 
     protected function setUser(?User $user): static
     {
+        if (! isset($this->user) || $this->user !== $user) {
+            $this->resetCreditState();
+        }
+
         $this->user = $user;
 
         return $this;
@@ -52,9 +56,19 @@ abstract class BaseDriver implements EntityDriverInterface, WithCalculate, WithC
 
     protected function setGuest(bool $condition = true): static
     {
+        if ($this->guest !== $condition) {
+            $this->resetCreditState();
+        }
+
         $this->guest = $condition;
 
         return $this;
+    }
+
+    protected function resetCreditState(): void
+    {
+        \Spatie\Once\Cache::getInstance()->forget($this);
+        $this->calculatedInputCredit = null;
     }
 
     public function ensureUserProvided(): void
@@ -94,6 +108,10 @@ abstract class BaseDriver implements EntityDriverInterface, WithCalculate, WithC
 
     public function forPlan(?Plan $plan): static
     {
+        if ($this->plan !== $plan) {
+            $this->resetCreditState();
+        }
+
         $this->plan = $plan;
 
         return $this;
@@ -101,6 +119,10 @@ abstract class BaseDriver implements EntityDriverInterface, WithCalculate, WithC
 
     public function forTeam(?Team $team): static
     {
+        if ($this->team !== $team) {
+            $this->resetCreditState();
+        }
+
         $this->team = $team;
 
         return $this;

@@ -224,6 +224,7 @@ class PathAction implements AIAgentActionInterface
                     ],
                 ],
             ],
+            'required' => ['paths'],
         ];
     }
 }

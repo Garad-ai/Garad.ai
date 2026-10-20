@@ -138,9 +138,15 @@ class SocialMediaServiceProvider extends ServiceProvider implements UninstallExt
                 $router->group([
                     'prefix'     => 'social-media/oauth',
                 ], function (Router $router) {
+                    $router->get('popup-complete', fn () => view('social-media::oauth.popup-complete'))
+                        ->name('social-media.oauth.popup.complete');
+
                     $router->get('redirect/tiktok', [TiktokController::class, 'redirect'])->name('social-media.oauth.connect.tiktok');
                     $router->get('callback/tiktok', [TiktokController::class, 'callback'])->name('social-media.oauth.callback.tiktok');
 
+                    $router->post('callback/linkedin/select', [LinkedinController::class, 'selectAccount'])
+                        ->name('social-media.oauth.callback.linkedin.select')
+                        ->withoutMiddleware('auth');
                     $router->get('redirect/instagram', [InstagramController::class, 'redirect'])->name('social-media.oauth.connect.instagram');
                     $router->get('callback/instagram', [InstagramController::class, 'callback'])->name('social-media.oauth.callback.instagram');
 
@@ -151,7 +157,9 @@ class SocialMediaServiceProvider extends ServiceProvider implements UninstallExt
                     $router->get('callback/facebook', [FacebookController::class, 'callback'])->name('social-media.oauth.callback.facebook');
 
                     $router->get('redirect/linkedin', [LinkedinController::class, 'redirect'])->name('social-media.oauth.connect.linkedin');
-                    $router->get('callback/linkedin', [LinkedinController::class, 'callback'])->name('social-media.oauth.callback.linkedin');
+                    $router->get('callback/linkedin', [LinkedinController::class, 'callback'])
+                        ->name('social-media.oauth.callback.linkedin')
+                        ->withoutMiddleware('auth');
 
                     $router->get('redirect/youtube', [YoutubeController::class, 'redirectYoutube'])->name('social-media.oauth.connect.youtube');
                     $router->get('callback/youtube', [YoutubeController::class, 'callbackYoutube'])->name('social-media.oauth.callback.youtube');

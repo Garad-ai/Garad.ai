@@ -1,0 +1,109 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+
+class StagingChatSsoController extends Controller
+{
+    public function handle(Request $request): RedirectResponse
+    {
+        /*
+         * LibreChat/OIDC interaction id.
+         * Save it before sending unauthenticated users to Garad login.
+         */
+        $uid = trim((string) $request->query('uid', ''));
+
+        if ($uid !== '') {
+            $request->session()->put('staging_chat_oidc_uid', $uid);
+        }
+
+        /*
+         * Use the REAL Garad AI login.
+         */
+        if (! Auth::check()) {
+            return redirect()->route('login', [
+                'redirect' => 'stagingChat',
+            ]);
+        }
+
+        /*
+         * After Garad login the redirect mapping returns here.
+         */
+        $uid = (string) $request->session()->pull(
+            'staging_chat_oidc_uid',
+            ''
+        );
+
+        abort_if(
+            $uid === '',
+            400,
+            'Missing staging chat authentication session.'
+        );
+
+        $secret = (string) config('garad_staging_sso.secret', '');
+        $bridge = rtrim(
+            (string) config('garad_staging_sso.bridge_url', ''),
+            '/'
+        );
+
+        abort_if($secret === '', 500, 'Staging SSO secret is missing.');
+        abort_if($bridge === '', 500, 'Staging SSO bridge URL is missing.');
+
+        $user = Auth::user();
+
+        $email = strtolower(
+            trim((string) data_get($user, 'email', ''))
+        );
+
+        $name = trim((string) data_get($user, 'name', ''));
+
+        if ($name === '') {
+            $name = $email ?: 'Garad User';
+        }
+
+        /*
+         * Short-lived signed identity.
+         * Passwords/API keys are NEVER sent to LibreChat.
+         */
+        $payload = [
+            'v'     => 1,
+            'uid'   => $uid,
+            'sub'   => (string) $user->getAuthIdentifier(),
+            'email' => $email,
+            'name'  => $name,
+            'iat'   => time(),
+            'exp'   => time() + 90,
+            'nonce' => Str::random(40),
+        ];
+
+        $json = json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES |
+            JSON_UNESCAPED_UNICODE |
+            JSON_THROW_ON_ERROR
+        );
+
+        $encoded = rtrim(
+            strtr(base64_encode($json), '+/', '-_'),
+            '='
+        );
+
+        $signature = hash_hmac(
+            'sha256',
+            $encoded,
+            $secret
+        );
+
+        return redirect()->away(
+            $bridge .
+            '/garad/complete?payload=' .
+            rawurlencode($encoded) .
+            '&sig=' .
+            rawurlencode($signature)
+        );
+    }
+}

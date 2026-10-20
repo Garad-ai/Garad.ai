@@ -7,6 +7,7 @@ namespace App\Extensions\AIAgent\System;
 use App\Domains\Marketplace\Contracts\UninstallExtensionServiceProviderInterface;
 use App\Extensions\AIAgent\System\Actions\AiCallAction;
 use App\Extensions\AIAgent\System\Actions\GenerateReportAction;
+use App\Extensions\AIAgent\System\Actions\MemoryAction;
 use App\Extensions\AIAgent\System\Actions\PathAction;
 use App\Extensions\AIAgent\System\Actions\SendMessageAction;
 use App\Extensions\AIAgent\System\Connectors\ConnectorRegistry;
@@ -18,6 +19,7 @@ use App\Extensions\AIAgent\System\Engine\AIAgentActionRegistry;
 use App\Extensions\AIAgent\System\Enums\ChannelEnum;
 use App\Extensions\AIAgent\System\Formatters\MessageFormatter;
 use App\Extensions\AIAgent\System\Formatters\TelegramFormatter;
+use App\Extensions\AIAgent\System\Http\Controllers\AgentOperationsController;
 use App\Extensions\AIAgent\System\Http\Controllers\AIAgentDashboardController;
 use App\Extensions\AIAgent\System\Http\Controllers\AIAgentSettingController;
 use App\Extensions\AIAgent\System\Http\Controllers\ChannelController;
@@ -71,6 +73,7 @@ class AIAgentServiceProvider extends ServiceProvider implements UninstallExtensi
         $registry->register('ai_call', AiCallAction::class);
         $registry->register('send_message', SendMessageAction::class);
         $registry->register('generate_report', GenerateReportAction::class);
+        $registry->register('memory', MemoryAction::class);
         $registry->register('path', PathAction::class);
 
         return $this;
@@ -182,8 +185,26 @@ class AIAgentServiceProvider extends ServiceProvider implements UninstallExtensi
                 $router->get('', AIAgentDashboardController::class)->name('dashboard');
 
                 // Workflows
+                $router->get('operations/workflows', [AgentOperationsController::class, 'workflows'])
+                    ->name('operations.workflows');
+                $router->get('operations/runs', [AgentOperationsController::class, 'runs'])
+                    ->name('operations.runs');
+                $router->get('operations/chats/{chatId}/activity', [AgentOperationsController::class, 'conversationActivity'])
+                    ->whereNumber('chatId')
+                    ->name('operations.chats.activity');
+                $router->post('operations/runs/{run}/cancel', [AgentOperationsController::class, 'cancelRun'])
+                    ->whereNumber('run')
+                    ->name('operations.runs.cancel');
+                $router->get('operations/approvals', [AgentOperationsController::class, 'approvals'])
+                    ->name('operations.approvals');
+                $router->post('operations/workflows/{workflow}/run', [AgentOperationsController::class, 'run'])
+                    ->name('operations.workflows.run');
+                $router->post('operations/approvals/{approval}/decision', [AgentOperationsController::class, 'decideApproval'])
+                    ->name('operations.approvals.decision');
                 $router->post('workflows/generate-from-prompt', [WorkflowController::class, 'generateFromPrompt'])
                     ->name('workflows.generate-from-prompt');
+                $router->post('workflows/create-from-prompt', [WorkflowController::class, 'createFromPrompt'])
+                    ->name('workflows.create-from-prompt');
                 $router->get('workflows/available-actions', [WorkflowController::class, 'availableActions'])
                     ->name('workflows.available-actions');
                 $router->get('workflows/available-models', [WorkflowController::class, 'availableModels'])

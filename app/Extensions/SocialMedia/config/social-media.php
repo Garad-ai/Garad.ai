@@ -82,12 +82,17 @@ return [
     'linkedin' => [
         'app_id'       => 'LINKEDIN_APP_ID', // LINKEDIN_APP_ID
         'app_secret'   => 'LINKEDIN_APP_SECRET', // LINKEDIN_APP_SECRET
-        'base_url'     => 'https://linkedin.com',
+        'base_url'     => 'https://www.linkedin.com',
         'api_url'      => 'https://api.linkedin.com',
-        'redirect_uri' => '/social-media/oauth/callback/linkedin',
-        'scopes'       => ['openid profile email w_member_social'],
+        'redirect_uri' => env('LINKEDIN_REDIRECT_URI', '/social-media/oauth/callback/linkedin'),
+        'scopes'       => ['openid', 'profile', 'email', 'w_member_social'],
+        // Add only approved organization scopes (such as rw_organization_admin and w_organization_social).
+        'organization_scopes' => array_values(array_intersect(
+            ['r_organization_admin', 'rw_organization_admin', 'r_organization_social', 'w_organization_social'],
+            array_filter(array_map('trim', explode(',', (string) env('LINKEDIN_ORGANIZATION_SCOPES', ''))))
+        )),
         // 'api_version' => 'v2',
-        'header_version'          => '202408',
+        'header_version'          => env('LINKEDIN_API_VERSION', '202609'),
         'restli_protocol_version' => '2.0.0',
         'options'                 => [
             'visibility'       => 'PUBLIC',
@@ -178,7 +183,7 @@ return [
     'youtube' => [
         'client_id'     => env('YOUTUBE_CLIENT_ID'),
         'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
-        'redirect_uri'  => env('APP_URL') . '/social-media/oauth/callback/youtube',
+        'redirect_uri'  => env('YOUTUBE_REDIRECT_URI', '/social-media/oauth/callback/youtube'),
 
         'auth_url'   => 'https://accounts.google.com/o/oauth2/v2/auth',
         'token_url'  => 'https://oauth2.googleapis.com/token',
@@ -214,7 +219,7 @@ return [
     'youtube-shorts' => [
         'client_id'     => env('YOUTUBE_CLIENT_ID'),
         'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
-        'redirect_uri'  => env('APP_URL') . '/social-media/oauth/callback/youtube-shorts',
+        'redirect_uri'  => env('YOUTUBE_SHORTS_REDIRECT_URI', '/social-media/oauth/callback/youtube-shorts'),
 
         'auth_url'   => 'https://accounts.google.com/o/oauth2/v2/auth',
         'token_url'  => 'https://oauth2.googleapis.com/token',

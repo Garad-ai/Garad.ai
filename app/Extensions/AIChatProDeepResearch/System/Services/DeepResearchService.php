@@ -22,7 +22,7 @@ class DeepResearchService
     public function getDefaultModel(string $engine): string
     {
         return match ($engine) {
-            'openai' => setting('deep_research_openai_model', 'gpt-5'),
+            'openai' => setting('deep_research_openai_model', 'o3-deep-research'),
             default  => 'deep-research-pro-preview-12-2025',
         };
     }

@@ -1,0 +1,108 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Domains\Entity\Models\Entity;
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class GaradChatModelsController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $expected = trim((string) config('garad_staging_sso.secret', ''));
+        $provided = trim((string) $request->header('X-Garad-Bridge-Secret', ''));
+
+        abort_if(
+            $expected === '' ||
+            $provided === '' ||
+            ! hash_equals($expected, $provided),
+            401,
+            'Unauthorized'
+        );
+
+        $email = strtolower(trim((string) $request->query('email', '')));
+
+        abort_if($email === '', 422, 'User email is required.');
+
+        $user = User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        abort_if(! $user, 404, 'Garad AI user was not found.');
+
+        /*
+         * Garad user is authoritative for this request.
+         */
+        Auth::setUser($user);
+
+        /*
+         * 1. Models explicitly available through the user's plan.
+         */
+        $planModels = collect(Entity::planModels());
+
+        /*
+         * 2. Global/default models must remain available even
+         *    when the user has a paid plan.
+         *
+         * This is important for free/default Garad models such
+         * as HIR when they are marked is_selected.
+         */
+        $defaultModels = Entity::query()
+            ->isEnabled()
+            ->where('is_selected', 1)
+            ->whereHas('tokens', function ($query) {
+                $query->where('type', 'word');
+            })
+            ->get();
+
+        $models = $planModels
+            ->merge($defaultModels)
+            ->unique(function ($entity) {
+                try {
+                    return $entity->key->value;
+                } catch (\Throwable) {
+                    return (string) $entity->getKey();
+                }
+            })
+            ->map(function ($entity) {
+                $id = null;
+                $engine = null;
+                $provider = 'Garad AI';
+
+                try {
+                    $id = $entity->key->value;
+                } catch (\Throwable) {
+                    $id = (string) $entity->key;
+                }
+
+                try {
+                    $engine = $entity->engine->value;
+                    $provider = $entity->engine->label();
+                } catch (\Throwable) {
+                    $engine = (string) $entity->engine;
+                }
+
+                return [
+                    'id'       => $id,
+                    'name'     => $entity->title ?: $id,
+                    'engine'   => $engine,
+                    'provider' => $provider,
+                ];
+            })
+            ->filter(fn ($model) => ! empty($model['id']))
+            ->values();
+
+        return response()->json([
+            'ok' => true,
+            'user' => [
+                'id'    => $user->id,
+                'email' => $user->email,
+            ],
+            'models' => $models,
+        ]);
+    }
+}

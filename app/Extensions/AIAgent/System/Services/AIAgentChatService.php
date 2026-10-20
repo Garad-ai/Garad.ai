@@ -22,6 +22,8 @@ use OpenAI\Contracts\ClientContract;
 
 class AIAgentChatService
 {
+    private const MAX_ANTHROPIC_CONTINUATIONS = 4;
+
     protected null|int|User $creditUser = null;
 
     protected ?EntityEnum $lastUsedModel = null;
@@ -480,31 +482,67 @@ class AIAgentChatService
     private function viaAnthropic(string $systemPrompt, array $messages, ?EntityEnum $modelOverride = null): string
     {
         $this->lastUsedModel = $modelOverride
-            ?? EntityEnum::tryFrom(setting('anthropic_default_model', EntityEnum::CLAUDE_3_OPUS->value))
-            ?? EntityEnum::CLAUDE_3_OPUS;
+            ?? EntityEnum::tryFrom(setting('anthropic_default_model', EntityEnum::CLAUDE_OPUS_4_8->value))
+            ?? EntityEnum::CLAUDE_OPUS_4_8;
 
+        $messages = $this->normalizeMessagesForAnthropic($messages);
         $service = app(AnthropicService::class)
             ->setSystem($systemPrompt)
-            ->setMessages($this->normalizeMessagesForAnthropic($messages))
             ->setStream(false);
 
         if ($modelOverride !== null && method_exists($service, 'setModel')) {
             $service->setModel($modelOverride->value);
         }
 
-        $response = $service->stream();
+        $responseText = '';
+        $continuationCount = 0;
 
-        if ($response->failed()) {
-            $modelLabel = $modelOverride?->value ?? 'default';
-            $error = $response->json('error.message') ?? $response->json('error') ?? "HTTP {$response->status()}";
+        while (true) {
+            $response = $service->setMessages($messages)->stream();
 
-            throw new Exception("Anthropic API error (model: {$modelLabel}): {$error}");
+            if ($response->failed()) {
+                $modelLabel = $modelOverride?->value ?? 'default';
+                $error = $response->json('error.message') ?? $response->json('error') ?? "HTTP {$response->status()}";
+
+                throw new Exception("Anthropic API error (model: {$modelLabel}): {$error}");
+            }
+
+            $body = $response->json();
+            $segment = collect($body['content'] ?? [])
+                ->where('type', 'text')
+                ->pluck('text')
+                ->implode('');
+            $responseText .= $segment;
+
+            if (($body['stop_reason'] ?? null) !== 'max_tokens') {
+                return $responseText;
+            }
+
+            $request = request();
+            $providerBudgetExhausted = false;
+            if ($request?->attributes->has('garad_provider_request_max')) {
+                $maximumRequests = min(
+                    \App\Services\Ai\ProviderRequestBudgetService::MAX_PROVIDER_REQUESTS,
+                    (int) $request->attributes->get('garad_provider_request_max'),
+                );
+                $requestsUsed = (int) $request->attributes->get('garad_provider_request_count', 0);
+                $providerBudgetExhausted = $requestsUsed >= $maximumRequests;
+            }
+
+            if ($segment === '' || $continuationCount >= self::MAX_ANTHROPIC_CONTINUATIONS || $providerBudgetExhausted) {
+                throw new Exception(
+                    'Anthropic stopped the response at its output limit and the continuation allowance was exhausted. '
+                    . 'The response is incomplete; reduce the task size or continue it in a new message.',
+                );
+            }
+
+            $messages[] = ['role' => 'assistant', 'content' => $segment];
+            $messages[] = [
+                'role' => 'user',
+                'content' => 'Continue the response from exactly where it stopped. Do not repeat any text already written. Finish all remaining sections and include a clear conclusion.',
+            ];
+            $continuationCount++;
         }
-
-        return collect($response->json('content') ?? [])
-            ->where('type', 'text')
-            ->pluck('text')
-            ->implode('');
     }
 
     private function viaGemini(string $systemPrompt, array $messages, EngineEnum $engine, ?EntityEnum $modelOverride = null, bool $webSearch = false): string

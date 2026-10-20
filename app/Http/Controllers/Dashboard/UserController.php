@@ -98,18 +98,20 @@ class UserController extends Controller
 
     public function redirect(Request $request)
     {
-        $route = 'dashboard.user.index';
-
-        if ($request->user()->isAdmin() && Helper::appIsNotDemo()) {
-            $route = 'dashboard.admin.index';
+        if (! $request->user()->isAdmin()) {
+            return to_route('chat.pro');
         }
 
-        return to_route($route);
+        return to_route('dashboard.admin.index');
     }
 
     public function index()
     {
         $user = Auth::user();
+        if (! $user->isAdmin()) {
+            return to_route('chat.pro');
+        }
+
         $user->load('folders');
         $this->service->setCache();
         $ongoingPayments = null;

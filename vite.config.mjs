@@ -139,6 +139,7 @@ export default ( { mode } ) => {
 	process.env = { ...process.env, ...loadEnv( mode, process.cwd() ) };
 
 	return defineConfig( {
+		base: process.env.VITE_APP_BASE_PATH || '/',
 		server: detectServerConfig( process.env.VITE_APP_DOMAIN || 'magicai.test' ),
 		plugins,
 		build: {

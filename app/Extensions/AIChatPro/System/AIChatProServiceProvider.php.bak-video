@@ -1,0 +1,260 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Extensions\AIChatPro\System;
+
+use App\Domains\Marketplace\Contracts\UninstallExtensionServiceProviderInterface;
+use App\Extensions\AIChatPro\System\Connectors\ConnectorRegistry;
+use App\Extensions\AIChatPro\System\Connectors\Models\AIChatProConnector;
+use App\Extensions\AIChatPro\System\Connectors\Policies\AIChatProConnectorPolicy;
+use App\Extensions\AIChatPro\System\Events\ConnectorTokenInvalidated;
+use App\Extensions\AIChatPro\System\Http\Controllers\AIChatProController;
+use App\Extensions\AIChatPro\System\Http\Controllers\AIChatProSettingsController;
+use App\Extensions\AIChatPro\System\Http\Controllers\ArtifactController;
+use App\Extensions\AIChatPro\System\Http\Controllers\ConnectorController;
+use App\Extensions\AIChatPro\System\Http\Controllers\EditImageStreamController;
+use App\Extensions\AIChatPro\System\Http\Controllers\GaradToolStatusController;
+use App\Extensions\AIChatPro\System\Http\Controllers\ScheduledTaskController;
+use App\Extensions\AIChatPro\System\Http\Controllers\ProjectController;
+use App\Extensions\AIChatPro\System\Http\Controllers\DocumentExportController;
+use App\Extensions\AIChatPro\System\Http\Controllers\ReactChatController;
+use App\Extensions\AIChatPro\System\Http\Controllers\WorkspaceController;
+use App\Extensions\AIChatPro\System\Listeners\NotifyUserOfConnectorFailure;
+use App\Helpers\Classes\MarketplaceHelper;
+use App\Http\Middleware\RedirectLegacyChatProForUsers;
+use App\Http\Controllers\AIChatController;
+use App\Http\Controllers\OpenAi\GeneratorController;
+use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+use Mcamara\LaravelLocalization\Facades\LaravelLocalization;
+
+/**
+ * Author: MagicAI Team <info@liquid-themes.com>
+ *
+ * @note When you create a new service provider, make sure to add it to the "MarketplaceServiceProvider". Otherwise, your Laravel application won’t recognize this provider, and the related functions won’t work properly.
+ * @note If you want to perform a specific action when an extension is uninstalled, you can use the UninstallExtensionServiceProviderInterface. By implementing this interface, you can define custom operations that will be triggered during the uninstallation of the extension.
+ */
+class AIChatProServiceProvider extends ServiceProvider implements UninstallExtensionServiceProviderInterface
+{
+    public function register(): void
+    {
+        $this->app->singleton(ConnectorRegistry::class);
+    }
+
+    public function boot(Kernel $kernel): void
+    {
+        $this->registerTranslations()
+            ->registerViews()
+            ->registerRoutes()
+            ->registerMigrations()
+            ->registerConnectorPolicies()
+            ->registerConnectorEvents()
+            ->publishAssets()
+            ->registerComponents();
+
+    }
+
+    private function registerConnectorEvents(): static
+    {
+        Event::listen(ConnectorTokenInvalidated::class, NotifyUserOfConnectorFailure::class);
+
+        return $this;
+    }
+
+    private function registerConnectorPolicies(): static
+    {
+        Gate::policy(AIChatProConnector::class, AIChatProConnectorPolicy::class);
+
+        return $this;
+    }
+
+    public function registerComponents(): static
+    {
+        //        $this->loadViewComponentsAs('example', []);
+
+        return $this;
+    }
+
+    public function publishAssets(): static
+    {
+        $this->publishes([
+            //            __DIR__ . '/../resources/assets/js' => public_path('vendor/example/js'),
+            //            __DIR__ . '/../resources/assets/images' => public_path('vendor/example/images'),
+        ], 'extension');
+
+        return $this;
+    }
+
+    protected function registerTranslations(): static
+    {
+        $this->loadTranslationsFrom(__DIR__ . '/../resources/lang', 'ai-chat-pro');
+
+        return $this;
+    }
+
+    public function registerViews(): static
+    {
+        $this->loadViewsFrom([__DIR__ . '/../resources/views'], 'ai-chat-pro');
+
+        return $this;
+    }
+
+    public function registerMigrations(): static
+    {
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+
+        return $this;
+    }
+
+    private function registerRoutes(): static
+    {
+        $this->router()
+            ->group([
+                'prefix'     => LaravelLocalization::setLocale(),
+                'middleware' => ['web', 'auth', 'localeSessionRedirect', 'localizationRedirect', 'localeViewPath'],
+            ], function (Router $router) {
+                $router
+                    ->controller(AIChatProSettingsController::class)
+                    ->prefix('dashboard/admin/openai/chat/pro')
+                    ->name('dashboard.admin.openai.chat.pro.')
+                    ->middleware('admin')
+                    ->group(function (Router $router) {
+                        $router->get('settings', 'index')->name('settings');
+                        $router->post('settings', 'update')->name('update');
+                    });
+
+                $router
+                    ->controller(AIChatProController::class)
+                    ->prefix('dashboard/user/openai/chat/pro')
+                    ->name('dashboard.user.openai.chat.pro.')
+                    ->group(function (Router $router) {
+                        $router->get('chat/{slug?}', 'index')
+                            ->middleware(RedirectLegacyChatProForUsers::class)
+                            ->name('index');
+                        $router->get('message-suggestions/{messageId}', 'getMessageSuggestions')->name('message-suggestions');
+                        // GARAD_V63_STATUS_ROUTES_START
+                        $router->get('garad-video-status/{videoId}', 'garadVideoStatus')->name('garad-video-status');
+                        $router->get('garad-presentation-status/{generationId}', 'garadPresentationStatus')->name('garad-presentation-status');
+                        // GARAD_V63_STATUS_ROUTES_END
+                    });
+
+                $router->get('dashboard/user/openai/chat/pro/artifacts/{artifact}/download', [ArtifactController::class, 'download'])
+                    ->name('dashboard.user.openai.chat.pro.artifacts.download');
+
+                $router->prefix('dashboard/user/openai/chat/pro/scheduled')
+                    ->name('dashboard.user.openai.chat.pro.scheduled.')
+                    ->controller(ScheduledTaskController::class)
+                    ->group(function (Router $router) {
+                        $router->get('/', 'index')->name('index');
+                        $router->post('/', 'store')->name('store');
+                        $router->patch('{taskId}/status', 'status')->name('status');
+                        $router->delete('{taskId}', 'destroy')->name('destroy');
+                    });
+
+                $router->prefix('dashboard/user/openai/chat/pro/projects')
+                    ->name('dashboard.user.openai.chat.pro.projects.')
+                    ->controller(ProjectController::class)
+                    ->group(function (Router $router) {
+                        $router->get('/', 'index')->name('index');
+                        $router->post('/', 'store')->name('store');
+                        $router->put('{projectId}', 'update')->name('update');
+                        $router->delete('{projectId}', 'destroy')->name('destroy');
+                    });
+
+                $router->prefix('dashboard/user/openai/chat/pro/workspace')
+                    ->name('dashboard.user.openai.chat.pro.workspace.')
+                    ->controller(WorkspaceController::class)
+                    ->group(function (Router $router) {
+                        $router->get('agents', 'agents')->name('agents');
+                        $router->get('library', 'library')->name('library');
+                        $router->get('code', 'code')->name('code');
+                    });
+
+                $router
+                    ->prefix('dashboard/user/ai-chat-pro/connectors')
+                    ->name('dashboard.user.ai-chat-pro.connectors.')
+                    ->group(function (Router $router) {
+                        $router->get('/', [ConnectorController::class, 'index'])->name('index');
+                        $router->delete('{connector}', [ConnectorController::class, 'destroy'])->name('destroy');
+                        $router->get('pre-consent/{key}', [ConnectorController::class, 'preConsent'])->name('pre-consent');
+                        $router->get('{connector}/access', [ConnectorController::class, 'accessShow'])->name('access.show');
+                        $router->put('{connector}/access', [ConnectorController::class, 'accessUpdate'])->name('access.update');
+                        $router->post('{connector}/toggle-pause', [ConnectorController::class, 'togglePause'])->name('toggle-pause');
+                    });
+
+                $router
+                    ->controller(ReactChatController::class)
+                    ->group(function (Router $router) {
+                        $router->get('/chat/{slug?}', 'index')->name('chat.pro');
+                        $router->get('/app/{slug}', 'index')
+                            ->where('slug', 'ai-image-generator|ai-video-generator|social-media')
+                            ->name('creative.tool');
+
+                        $router->get('/api/account', 'account');
+                        $router->get('/api/usage', 'usage');
+
+                        $router->get('/api/subscription', 'subscription');
+                        $router->get('/api/subscriptions/current', 'subscription');
+
+                        $router->get('/api/models', 'models');
+                        $router->get('/dashboard/user/ai-chat-pro/image-models', 'imageModels');
+                        $router->get('/dashboard/user/ai-chat-pro/image-proxy', 'imageProxy');
+
+                        $router->get('/api/composer/capabilities', 'composerCapabilities');
+                        $router->get('/api/composer/prompts', 'composerPrompts');
+                        $router->get('/api/composer/brand-products/{companyId}', 'composerBrandProducts');
+                    });
+
+                $router
+                    ->controller(DocumentExportController::class)
+                    ->group(function (Router $router) {
+                        $router->post('/api/presentations', 'createPresentation')->middleware('throttle:6,1');
+                        $router->get('/api/presentations/{generationId}', 'presentationStatus')->middleware('throttle:120,1')->where('generationId', '[A-Za-z0-9_\-]+');
+                        $router->post('/api/documents/{format}', 'export')->middleware('throttle:20,1');
+                        $router->get('/api/library', 'library');
+                        $router->delete('/api/library/{id}', 'destroy')->whereNumber('id');
+                    });
+            });
+
+        $this->router()
+            ->group([
+                'prefix'     => LaravelLocalization::setLocale(),
+                'middleware' => ['web', 'auth', 'localeSessionRedirect', 'localizationRedirect', 'localeViewPath'],
+            ], function (Router $router) {
+                $router
+                    ->controller(AIChatController::class)
+                    ->group(function (Router $router) {
+                        $router->post('/dashboard/user/openai/chat/start-new-chat', 'startNewChat');
+                    });
+                $router
+                    ->controller(AIChatController::class)
+                    ->group(function (Router $router) {
+                        $router->post('dashboard/user/generator/generate-stream', [GeneratorController::class, 'buildStreamedOutput'])->name('stream.generate')->middleware('surveyMiddleware');
+                    });
+                if (MarketplaceHelper::isRegistered('ai-chat-pro-image-chat')) {
+                    $router
+                        ->controller(EditImageStreamController::class)
+                        ->group(function (Router $router) {
+                            $router->post('dashboard/user/generator/generate-stream-edit-image', 'buildStreamedOutput')->name('stream.generate.edit-image');
+                        });
+                }
+            });
+
+        return $this;
+    }
+
+    private function router(): Router|Route
+    {
+        return $this->app['router'];
+    }
+
+    public static function uninstall(): void
+    {
+        // TODO: Implement uninstall() method.
+    }
+}

@@ -11,10 +11,12 @@ use App\Extensions\AIChatProDeepResearch\System\Models\DeepResearchSession;
 use App\Extensions\AIChatProDeepResearch\System\Services\DeepResearchService;
 use App\Http\Controllers\Controller;
 use App\Models\Usage;
+use App\Models\UserOpenaiChat;
 use App\Models\UserOpenaiChatMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -32,6 +34,9 @@ class DeepResearchController extends Controller
         ]);
 
         $user = auth()->user();
+        $chat = UserOpenaiChat::query()
+            ->where('user_id', $user->id)
+            ->findOrFail($request->integer('chat_id'));
 
         // Plan access check
         $plan = $user->relationPlan;
@@ -75,7 +80,7 @@ class DeepResearchController extends Controller
         // Create user message record (input only — no output, so it renders as a user bubble only)
         $userMessage = UserOpenaiChatMessage::create([
             'user_id'             => $user->id,
-            'user_openai_chat_id' => $request->chat_id,
+            'user_openai_chat_id' => $chat->id,
             'input'               => $request->prompt,
             'response'            => null,
             'output'              => null,
@@ -87,7 +92,7 @@ class DeepResearchController extends Controller
         // Create AI placeholder message
         $aiMessage = UserOpenaiChatMessage::create([
             'user_id'             => $user->id,
-            'user_openai_chat_id' => $request->chat_id,
+            'user_openai_chat_id' => $chat->id,
             'input'               => null,
             'response'            => null,
             'output'              => __('Researching...'),
@@ -101,7 +106,7 @@ class DeepResearchController extends Controller
         $session = DeepResearchSession::create([
             'user_id'     => $user->id,
             'message_id'  => $aiMessage->id,
-            'chat_id'     => $request->chat_id,
+            'chat_id'     => $chat->id,
             'query'       => $request->prompt,
             'status'      => 'researching',
             'engine_used' => $engine,
@@ -127,7 +132,8 @@ class DeepResearchController extends Controller
                 'trace'      => $e->getTraceAsString(),
             ]);
 
-            $userMessage = __('Deep research failed to start. Please try again.');
+            [$failureCode, $categoryMessage] = self::classifyProviderError($e->getMessage());
+            $userMessage = $categoryMessage ?? __('Deep research failed to start. Please try again.');
             if (auth()->user()?->isAdmin()) {
                 $userMessage = __('Failed to start deep research: ') . $e->getMessage();
             }
@@ -142,6 +148,7 @@ class DeepResearchController extends Controller
             return response()->json([
                 'error'  => $userMessage,
                 'status' => 'failed',
+                'code'   => $failureCode,
             ], 500);
         }
 
@@ -163,6 +170,7 @@ class DeepResearchController extends Controller
         if (in_array($session->status, ['completed', 'failed', 'cancelled'])) {
             return response()->json([
                 'status'         => $session->status,
+                'error'          => $session->status === 'failed' ? $session->message?->output : null,
                 'report'         => $session->report_output,
                 'sources'        => $session->sources,
                 'sources_count'  => $session->sources_count,
@@ -173,10 +181,7 @@ class DeepResearchController extends Controller
         }
 
         if (! $session->provider_response_id) {
-            return response()->json([
-                'status'         => 'researching',
-                'thinking_steps' => [],
-            ]);
+            return $this->markFailed($session, 'The provider did not return a research session ID.');
         }
 
         try {
@@ -207,23 +212,7 @@ class DeepResearchController extends Controller
                     'error'       => $providerError,
                 ]);
 
-                $userMessage = __('Deep research failed. Please try again.');
-
-                if (auth()->user()?->isAdmin()) {
-                    $userMessage = __('Deep research failed: ') . $providerError;
-                }
-
-                $session->update(['status' => 'failed']);
-
-                $session->message?->update([
-                    'output'   => $userMessage,
-                    'response' => $userMessage,
-                ]);
-
-                return response()->json([
-                    'status' => 'failed',
-                    'error'  => $userMessage,
-                ]);
+                return $this->markFailed($session, $providerError);
             }
 
             // Still in progress
@@ -241,11 +230,7 @@ class DeepResearchController extends Controller
                 'trace'       => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'status'         => 'researching',
-                'thinking_steps' => $session->thinking_steps ?? [],
-                'error'          => $e->getMessage(),
-            ]);
+            return $this->markFailed($session, $e->getMessage());
         }
     }
 
@@ -318,7 +303,7 @@ class DeepResearchController extends Controller
 
     private function handleCompletion(DeepResearchSession $session, array $result, $providerDriver): JsonResponse
     {
-        $outputText = $result['output_text'] ?? '';
+        $outputText = is_string($result['output_text'] ?? null) ? $result['output_text'] : '';
         $output = $result['output'] ?? $result['outputs'] ?? [];
 
         $sources = $providerDriver->extractSources($output);
@@ -327,55 +312,120 @@ class DeepResearchController extends Controller
         $duration = (int) now()->diffInSeconds($session->created_at);
         $wordCount = countWords($outputText);
 
-        // Deduct shared credits for the generated report text
-        $creditsUsed = 0;
+        return DB::transaction(function () use ($session, $outputText, $output, $sources, $searchesCount, $thinkingSteps, $duration, $wordCount): JsonResponse {
+            $session = DeepResearchSession::query()
+                ->lockForUpdate()
+                ->findOrFail($session->getKey());
 
-        if ($outputText !== '') {
-            $entityEnum = EntityEnum::fromSlug($session->model_used);
+            if ($session->status === 'completed') {
+                return $this->completedResponse($session);
+            }
+
+            if ($session->status !== 'researching') {
+                return response()->json([
+                    'status' => $session->status,
+                    'error'  => $session->status === 'failed' ? $session->message?->output : null,
+                ]);
+            }
+
+            if (trim($outputText) === '') {
+                return $this->markFailed($session, 'The provider completed without returning a research report.');
+            }
+
+            $creditsUsed = 0;
+            $entityEnum = $session->engine_used === 'gemini'
+                ? EntityEnum::GEMINI_DEEP_RESEARCH
+                : EntityEnum::fromSlug($session->model_used);
             $driver = Entity::driver($entityEnum)->forUser($session->user_id);
             $driver->input($outputText)->calculateCredit()->decreaseCredit();
             Usage::getSingle()->updateWordCounts((int) max(1, round($driver->calculate())));
             $creditsUsed = (int) ceil(max(1, $driver->getCalculatedInputCredit()));
-        }
 
-        // Update session
-        $session->update([
-            'status'           => 'completed',
-            'sources'          => $sources,
-            'sources_count'    => count($sources),
-            'searches_count'   => $searchesCount,
-            'duration_seconds' => $duration,
-            'credits_used'     => $creditsUsed,
-            'report_output'    => $outputText,
-            'thinking_steps'   => $thinkingSteps,
-            'raw_response'     => json_encode($output),
-        ]);
+            $session->update([
+                'status'           => 'completed',
+                'sources'          => $sources,
+                'sources_count'    => count($sources),
+                'searches_count'   => $searchesCount,
+                'duration_seconds' => $duration,
+                'credits_used'     => $creditsUsed,
+                'report_output'    => $outputText,
+                'thinking_steps'   => $thinkingSteps,
+                'raw_response'     => json_encode($output),
+            ]);
 
-        // Build rich output with thinking steps + report + sources for persistent rendering
-        $richOutput = $this->buildRichOutput($outputText, $thinkingSteps, $sources, $duration);
+            $richOutput = $this->buildRichOutput($outputText, $thinkingSteps, $sources, $duration);
+            $session->message?->update([
+                'response' => $richOutput,
+                'output'   => $richOutput,
+                'credits'  => $creditsUsed ?: $wordCount,
+                'words'    => $wordCount,
+            ]);
 
-        // Update AI message — rich output for display
-        $session->message?->update([
-            'response' => $richOutput,
-            'output'   => $richOutput,
-            'credits'  => $creditsUsed ?: $wordCount,
-            'words'    => $wordCount,
-        ]);
+            if ($session->chat) {
+                $session->chat->increment('total_credits', $wordCount);
+            }
 
-        // Update chat total credits
-        if ($session->chat) {
-            $session->chat->increment('total_credits', $wordCount);
-        }
+            return $this->completedResponse($session);
+        });
+    }
 
+    private function completedResponse(DeepResearchSession $session): JsonResponse
+    {
         return response()->json([
             'status'         => 'completed',
-            'report'         => $outputText,
-            'sources'        => $sources,
-            'sources_count'  => count($sources),
-            'searches_count' => $searchesCount,
-            'duration'       => $duration,
-            'thinking_steps' => $thinkingSteps,
+            'report'         => $session->report_output,
+            'sources'        => $session->sources ?? [],
+            'sources_count'  => $session->sources_count,
+            'searches_count' => $session->searches_count,
+            'duration'       => $session->duration_seconds,
+            'thinking_steps' => $session->thinking_steps ?? [],
             'auto_canvas'    => $this->service->isAutoCanvasEnabled(),
+        ]);
+    }
+
+    /**
+     * Map a raw provider error to a stable category and user-safe message.
+     * Provider access/quota problems are reported as such, never as an internal Garad credit error.
+     *
+     * @return array{0: string, 1: ?string}
+     */
+    public static function classifyProviderError(string $error): array
+    {
+        $e = strtolower($error);
+
+        if (preg_match('/\b(403|401)\b|does not have access|not have access|permission|not authorized|unauthorized|invalid api key|incorrect api key|model_not_found/', $e)) {
+            return ['provider_access_denied', __('The AI provider denied access to this research model for the configured account. Provider access must be enabled by the platform administrator.')];
+        }
+
+        if (preg_match('/\b429\b|quota|rate limit|resource_exhausted|insufficient_quota|billing|exceeded your current/', $e)) {
+            return ['provider_quota', __('The AI provider quota or billing limit for deep research has been reached. Please try again later.')];
+        }
+
+        return ['provider_error', null];
+    }
+
+    private function markFailed(DeepResearchSession $session, string $providerError): JsonResponse
+    {
+        [$code, $categoryMessage] = self::classifyProviderError($providerError);
+
+        $userMessage = $categoryMessage ?? __('Deep research failed. Please try again.');
+
+        if (auth()->user()?->isAdmin()) {
+            $userMessage = __('Deep research failed: ') . $providerError;
+        }
+
+        DB::transaction(function () use ($session, $userMessage): void {
+            $session->update(['status' => 'failed']);
+            $session->message?->update([
+                'output'   => $userMessage,
+                'response' => $userMessage,
+            ]);
+        });
+
+        return response()->json([
+            'status' => 'failed',
+            'error'  => $userMessage,
+            'code'   => $code,
         ]);
     }
 

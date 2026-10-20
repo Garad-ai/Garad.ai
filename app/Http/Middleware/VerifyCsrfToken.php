@@ -24,6 +24,7 @@ class VerifyCsrfToken extends Middleware
         'dashboard/user/payment/iyzico/*',
         'chatbot/*',
         'generator/webhook/fal-ai',
+        'video-agent/webhook/*',
         'dashboard/admin/config/more',
         'translations/lang/update-all',
         'social-media/*',

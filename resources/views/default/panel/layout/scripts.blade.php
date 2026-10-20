@@ -7,6 +7,19 @@
 			'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
 		}
 	});
+
+	// Many panel scripts hardcode AJAX URLs starting with "/dashboard/...".
+	// When the app is installed in a subdirectory (e.g. /garad.ai/public),
+	// those root-relative URLs bypass the subdirectory and 404. Rewrite
+	// any root-relative URL to be relative to the app's actual base URL.
+	(function () {
+		var appBaseUrl = @json(rtrim(url('/'), '/'));
+		$.ajaxPrefilter(function (options) {
+			if (options.url && options.url.charAt(0) === '/') {
+				options.url = appBaseUrl + options.url;
+			}
+		});
+	})();
 </script>
 
 @if (in_array($settings_two->chatbot_status, ['dashboard', 'both']) &&
@@ -111,7 +124,7 @@
 
 <!-- PAGES JS-->
 @guest()
-	<script src="{{ custom_theme_url('/assets/js/panel/login_register.js') }}"></script>
+	<script src="{{ custom_theme_url('/assets/js/panel/login_register.js') }}?v=2.9.2"></script>
 @endguest
 
 @auth

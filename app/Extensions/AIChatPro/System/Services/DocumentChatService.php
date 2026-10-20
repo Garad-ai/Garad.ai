@@ -12,6 +12,10 @@ class DocumentChatService
 
     private const MAX_CONTEXT_CHARACTERS = 12000;
 
+    private const MAX_SOURCE_DOCUMENT_CHUNKS = 18;
+
+    private const MAX_SOURCE_DOCUMENT_CHARACTERS = 30000;
+
     private const STOP_WORDS = [
         'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'from', 'how', 'i', 'if', 'in', 'into', 'is', 'it',
         'of', 'on', 'or', 'that', 'the', 'their', 'them', 'this', 'to', 'was', 'what', 'when', 'where', 'which', 'who', 'why', 'with', 'you', 'your',
@@ -24,6 +28,11 @@ class DocumentChatService
         $documents = $this->documents->getDocumentsForChat($chatId);
         if ($documents->isEmpty()) {
             return null;
+        }
+
+        $includeAllSourceDocuments = $this->isDocumentSourceRequest($prompt);
+        if ($includeAllSourceDocuments) {
+            $maxChunks = max($maxChunks, self::MAX_SOURCE_DOCUMENT_CHUNKS);
         }
 
         $terms = $this->extractTerms($prompt);
@@ -43,18 +52,27 @@ class DocumentChatService
                     'content' => $content,
                     'score' => $score,
                     'index' => (int) ($chunk['index'] ?? 0),
+                    'document_id' => (int) $document->id,
                 ];
             }
         }
 
-        usort($scoredChunks, static function (array $left, array $right): int {
-            return $right['score'] <=> $left['score'];
-        });
+        if ($includeAllSourceDocuments) {
+            $scoredChunks = $this->interleaveDocumentChunks($scoredChunks);
+            $selected = array_slice($scoredChunks, 0, $maxChunks);
+            $maxContextCharacters = self::MAX_SOURCE_DOCUMENT_CHARACTERS;
+        } else {
+            usort($scoredChunks, static function (array $left, array $right): int {
+                return $right['score'] <=> $left['score'];
+            });
 
-        $selected = array_filter(array_slice($scoredChunks, 0, $maxChunks), static fn (array $chunk): bool => $chunk['score'] > 0);
+            $selected = array_filter(array_slice($scoredChunks, 0, $maxChunks), static fn (array $chunk): bool => $chunk['score'] > 0);
 
-        if ($selected === []) {
-            $selected = array_slice($scoredChunks, 0, min($maxChunks, 3));
+            if ($selected === []) {
+                $selected = array_slice($scoredChunks, 0, min($maxChunks, 3));
+            }
+
+            $maxContextCharacters = self::MAX_CONTEXT_CHARACTERS;
         }
 
         $contextParts = [];
@@ -63,7 +81,7 @@ class DocumentChatService
         foreach ($selected as $chunk) {
             $part = sprintf("Document: %s\nChunk %d:\n%s", $chunk['document'], $chunk['index'] + 1, $chunk['content']);
             $characterCount += mb_strlen($part);
-            if ($characterCount > self::MAX_CONTEXT_CHARACTERS) {
+            if ($characterCount > $maxContextCharacters) {
                 break;
             }
             $contextParts[] = $part;
@@ -74,6 +92,48 @@ class DocumentChatService
         }
 
         return implode("\n\n---\n\n", $contextParts);
+    }
+
+    private function isDocumentSourceRequest(string $prompt): bool
+    {
+        $hasOutputFormat = preg_match('/\b(?:pdf|docx?|word|xlsx?|excel|pptx?|powerpoint|presentation)\b/iu', $prompt) === 1;
+        $hasDocumentAction = preg_match(
+            '/\b(?:convert|turn|transform|summari[sz]e|rewrite|translate|extract|create|generate|prepare|export|make|samee|sameey|diyaari|iiga\s+soo\s+dhig|u\s+rog|u\s+badal|ka\s+dhig)\b/iu',
+            $prompt,
+        ) === 1;
+
+        return $hasOutputFormat && $hasDocumentAction;
+    }
+
+    private function interleaveDocumentChunks(array $chunks): array
+    {
+        $byDocument = [];
+        foreach ($chunks as $chunk) {
+            $byDocument[$chunk['document_id']][] = $chunk;
+        }
+
+        foreach ($byDocument as &$documentChunks) {
+            usort($documentChunks, static function (array $left, array $right): int {
+                return ($right['score'] <=> $left['score'])
+                    ?: ($left['index'] <=> $right['index']);
+            });
+        }
+        unset($documentChunks);
+
+        $interleaved = [];
+        $depth = 0;
+        do {
+            $addedChunk = false;
+            foreach ($byDocument as $documentChunks) {
+                if (isset($documentChunks[$depth])) {
+                    $interleaved[] = $documentChunks[$depth];
+                    $addedChunk = true;
+                }
+            }
+            $depth++;
+        } while ($addedChunk);
+
+        return $interleaved;
     }
 
     private function extractTerms(string $prompt): array

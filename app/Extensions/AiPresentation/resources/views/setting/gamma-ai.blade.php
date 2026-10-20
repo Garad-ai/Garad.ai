@@ -43,7 +43,7 @@
                         <select
                             class="form-control select2"
                             id="gamma_api_secret"
-                            name="gamma_api_secret"
+                            name="gamma_api_secret[]"
                             multiple
                         >
                             @if($app_is_demo)

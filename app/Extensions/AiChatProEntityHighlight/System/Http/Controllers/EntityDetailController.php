@@ -55,6 +55,11 @@ class EntityDetailController extends Controller
             $messageContext
         );
 
+        // Never cache or present a failed lookup as real details.
+        if (! empty($details['unavailable'])) {
+            return response()->json(['message' => 'Entity details are temporarily unavailable.'], 502);
+        }
+
         // Cache the detail in the entity record to avoid future AI calls for the same entity
         if ($cached) {
             $entities = $cached->entities;
@@ -86,13 +91,29 @@ class EntityDetailController extends Controller
         $messageId = $request->input('message_id');
         $entityText = $request->input('entity_text');
 
+        if ($messageId) {
+            UserOpenaiChatMessage::query()
+                ->whereKey($messageId)
+                ->whereHas('chat', function ($query) {
+                    $query->where('user_id', Auth::id());
+                })
+                ->firstOrFail();
+        }
+
         // Check if we already have a cached image URL for this entity
         if ($messageId && $entityText) {
             $cached = ChatEntityHighlight::where('message_id', $messageId)->first();
             if ($cached) {
                 $existingEntity = collect($cached->entities)->firstWhere('text', $entityText);
                 if (! empty($existingEntity['detail']['image_url'])) {
-                    return response()->json(['image_url' => $existingEntity['detail']['image_url']]);
+                    $detail = $existingEntity['detail'];
+
+                    return response()->json([
+                        'image_url'    => $detail['image_url'],
+                        'image_source' => $detail['image_source'] ?? '',
+                        'image_domain' => $detail['image_domain'] ?? '',
+                        'image_link'   => $detail['image_link'] ?? '',
+                    ]);
                 }
             }
         }

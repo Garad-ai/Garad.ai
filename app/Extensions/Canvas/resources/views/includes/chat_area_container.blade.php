@@ -24,6 +24,18 @@
         ->toArray();
     $example_prompts_json = json_encode($example_prompts, JSON_THROW_ON_ERROR);
     $example_prompts = json_decode(setting('ai_chat_pro_suggestions', $example_prompts_json), false, 512, JSON_THROW_ON_ERROR);
+    $chatGreetingName = auth()->user()?->first_name ?? auth()->user()?->name ?? __('there');
+    $chatGreetingHour = now('Africa/Mogadishu')->hour;
+    $chatGreeting = $chatGreetingHour < 12
+        ? __('Good morning')
+        : ($chatGreetingHour < 17 ? __('Good afternoon') : __('Good evening'));
+    $chatRotatingPrompts = [
+        __('What would you like to build today?'),
+        __('How can I help you move an idea forward?'),
+        __('What are you working on right now?'),
+        __('Need a clear answer or a fresh perspective?'),
+        __('What can GaradAI take off your plate?'),
+    ];
 
     // ai actions icons
     $magicIconRewrite =
@@ -89,34 +101,26 @@
                     class="pointer-events-none invisible col-start-1 col-end-1 row-start-1 row-end-1 flex w-full scale-[1.1] flex-col items-center overflow-hidden py-10 opacity-0 transition-all group-[&.conversation-not-started]/chats-wrap:pointer-events-auto group-[&.conversation-not-started]/chats-wrap:visible group-[&.conversation-not-started]/chats-wrap:scale-100 group-[&.conversation-not-started]/chats-wrap:opacity-100">
                     <h2 class="mb-8 px-5 text-center text-[26px] font-medium leading-[1.1em] md:text-[30px]">
                         <span class="text-[0.7em] opacity-50">
-                            {{ __("I'm") }} {{ $category->name }}
+                            {{ $chatGreeting }}, {{ $chatGreetingName }}
                         </span>
                         <br>
-                        {{ __('Ask me anything') }}
+                        <span data-garad-rotating-prompt>{{ $chatRotatingPrompts[0] }}</span>
                     </h2>
 
-                    <div
-                        class="flex w-full gap-4 [--mask-from:7rem] [--mask-to:calc(100%-7rem)]"
-                        style="mask-image: linear-gradient(to right, transparent, black var(--mask-from), black var(--mask-to), transparent);"
-                        x-data="marquee({ pauseOnHover: true })"
-                    >
-                        <div class="lqd-marquee-viewport relative flex w-full overflow-hidden">
-                            <div class="lqd-marquee-slider flex w-full gap-4 py-2 lg:px-14">
-                                @foreach ($example_prompts ?? [] as $prompt)
-                                    <button
-                                        class="lqd-marquee-cell inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-surface-background px-2.5 py-3 text-base font-semibold leading-[1.15em] transition-all hover:-translate-y-1 hover:shadow dark:bg-heading-foreground/5 dark:hover:bg-white lg:text-[1.2vw]"
-                                        data-prompt="{{ __($prompt?->prompt) }}"
-                                        type="button"
-                                        @click.prevent="prompt = $event.currentTarget.getAttribute('data-prompt'); $nextTick(() => { $refs.prompt.focus(); $refs.prompt.dispatchEvent(new Event('input',{bubbles:true})); });"
-                                    >
-                                        <span class="bg-gradient-to-r from-gradient-from via-gradient-via to-gradient-to bg-clip-text text-transparent">
-                                            {{ __($prompt?->name) }}
-                                        </span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        </div>
-                    </div>
+                    <script>
+                        (() => {
+                            const promptElement = document.querySelector('[data-garad-rotating-prompt]');
+                            const prompts = {!! json_encode($chatRotatingPrompts, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!};
+
+                            if (!promptElement || prompts.length < 2) return;
+
+                            let promptIndex = 0;
+                            window.setInterval(() => {
+                                promptIndex = (promptIndex + 1) % prompts.length;
+                                promptElement.textContent = prompts[promptIndex];
+                            }, 45000);
+                        })();
+                    </script>
                 </div>
                 <div
                     @class([

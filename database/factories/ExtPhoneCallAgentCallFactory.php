@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Extensions\PhoneCallAgent\System\Enums\CallStatusEnum;
+use App\Extensions\PhoneCallAgent\System\Enums\DirectionEnum;
 use App\Extensions\PhoneCallAgent\System\Models\ExtPhoneCallAgent;
 use App\Extensions\PhoneCallAgent\System\Models\ExtPhoneCallAgentCall;
 use App\Models\User;
@@ -21,10 +22,18 @@ class ExtPhoneCallAgentCallFactory extends Factory
             'call_sid'      => 'CA' . fake()->regexify('[A-Za-z0-9]{32}'),
             'caller_number' => fake()->e164PhoneNumber(),
             'called_number' => fake()->e164PhoneNumber(),
+            'direction'     => DirectionEnum::Inbound,
             'status'        => CallStatusEnum::Ringing,
             'duration'      => 0,
             'started_at'    => now(),
             'ended_at'      => null,
         ];
+    }
+
+    public function outbound(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'direction' => DirectionEnum::Outbound,
+        ]);
     }
 }

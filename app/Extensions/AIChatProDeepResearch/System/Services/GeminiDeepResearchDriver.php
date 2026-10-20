@@ -208,32 +208,47 @@ class GeminiDeepResearchDriver
 
             // Primary: Gemini uses annotations with source URLs
             foreach ($output['annotations'] ?? [] as $annotation) {
-                if (! is_array($annotation) || ! isset($annotation['source'])) {
+                $url = is_array($annotation) ? ($annotation['source'] ?? null) : null;
+
+                if (! $this->isSafeSourceUrl($url)) {
                     continue;
                 }
 
                 $sources[] = [
                     'title' => $annotation['title'] ?? '',
-                    'url'   => $annotation['source'],
+                    'url'   => $url,
                 ];
             }
 
             // Fallback: check groundingMetadata (some API versions)
             foreach ($output['groundingMetadata']['groundingChunks'] ?? [] as $chunk) {
-                if (isset($chunk['web'])) {
+                if (! is_array($chunk)) {
+                    continue;
+                }
+
+                $web = $chunk['web'] ?? null;
+                $url = is_array($web) ? ($web['uri'] ?? null) : null;
+
+                if ($this->isSafeSourceUrl($url)) {
                     $sources[] = [
-                        'title' => $chunk['web']['title'] ?? '',
-                        'url'   => $chunk['web']['uri'] ?? '',
+                        'title' => $web['title'] ?? '',
+                        'url'   => $url,
                     ];
                 }
             }
 
             // Fallback: check citations
             foreach ($output['citations'] ?? [] as $citation) {
-                if (isset($citation['uri'])) {
+                if (! is_array($citation)) {
+                    continue;
+                }
+
+                $url = $citation['uri'] ?? null;
+
+                if ($this->isSafeSourceUrl($url)) {
                     $sources[] = [
                         'title' => $citation['title'] ?? '',
-                        'url'   => $citation['uri'],
+                        'url'   => $url,
                     ];
                 }
             }
@@ -254,7 +269,9 @@ class GeminiDeepResearchDriver
         $redirectIndices = [];
 
         foreach ($sources as $i => $source) {
-            if (str_contains($source['url'] ?? '', 'vertexaisearch.cloud.google.com')) {
+            $host = parse_url($source['url'] ?? '', PHP_URL_HOST);
+
+            if (is_string($host) && strtolower($host) === 'vertexaisearch.cloud.google.com') {
                 $redirectIndices[$i] = $source['url'];
             }
         }
@@ -281,7 +298,7 @@ class GeminiDeepResearchDriver
 
             $location = $response->header('Location');
 
-            if ($location) {
+            if ($this->isSafeSourceUrl($location)) {
                 $sources[$i]['url'] = $location;
 
                 // Use resolved domain as title if no title available
@@ -293,6 +310,15 @@ class GeminiDeepResearchDriver
         }
 
         return $sources;
+    }
+
+    private function isSafeSourceUrl(mixed $url): bool
+    {
+        if (! is_string($url) || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+
+        return in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true);
     }
 
     /**

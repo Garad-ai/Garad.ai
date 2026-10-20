@@ -45,7 +45,7 @@ class ImageReader
             $candidates[] = $defaultEngine;
         }
 
-        foreach ([EngineEnum::OPEN_AI->value, EngineEnum::GEMINI, EngineEnum::ANTHROPIC] as $engine) {
+        foreach ([EngineEnum::OPEN_AI, EngineEnum::GEMINI, EngineEnum::ANTHROPIC] as $engine) {
             if (! in_array($engine, $candidates, true)) {
                 $candidates[] = $engine;
             }

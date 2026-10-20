@@ -15,6 +15,45 @@ use Throwable;
 
 class SmartImageService
 {
+    public static function isExplicitImageSearchRequest(?string $prompt): bool
+    {
+        $text = mb_strtolower(trim((string) $prompt));
+        if ($text === ''
+            || preg_match('/\b(?:no|without|skip|don.t|do not|text only|ha\s+isticmaalin|ha\s+(?:muuji|tus|soo\s+bandhigin)|sawir\s+la.?aan)\b/u', $text)
+            || preg_match('/\b(?:create|generate|draw|design|make|samee|abuuri)\b.{0,35}\b(?:image|picture|photo|illustration|poster|logo|icon|sawir|astaan)\p{L}*/u', $text)) {
+            return false;
+        }
+
+        $visual = '(?:images?|pictures?|photos?|illustrations?|posters?|logos?|icons?|sawir\\p{L}*|astaan\\p{L}*)';
+        $action = '(?:show|display|find|search|look\\s+for|include|attach|muuji|i\\s+tus|tus|raadi|soo\\s+bandhig|ku\\s+dar)';
+
+        return preg_match('/\\b' . $action . '\\b.{0,80}\\b' . $visual . '\\b/u', $text) === 1
+            || preg_match('/\\b' . $visual . '\\b.{0,40}\\b' . $action . '\\b/u', $text) === 1
+            || preg_match('/\\b' . $visual . '\\s+(?:of|for|ee|ku\\s+saabsan)\\b/u', $text) === 1;
+    }
+
+    public static function searchQueryFromPrompt(?string $prompt): string
+    {
+        $query = trim((string) $prompt);
+        $query = preg_replace(
+            '/^(?:please\s+)?(?:show(?:\s+me)?|display|find|search(?:\s+for)?|look\s+for|include|attach)\s+/iu',
+            '',
+            $query,
+        ) ?? $query;
+        $query = preg_replace(
+            '/^(?:fadlan\s+)?(?:muuji|i\s+tus|tus|raadi|soo\s+bandhig|ku\s+dar)\s+/iu',
+            '',
+            $query,
+        ) ?? $query;
+        $query = preg_replace(
+            '/^(?:(?:a|an|the)\s+)?(?:images?|pictures?|photos?|illustrations?|posters?|logos?|icons?|sawir(?:ka|ta)?|astaanta?)\s+(?:(?:of|for|ee|ku\s+saabsan)\s+)?/iu',
+            '',
+            $query,
+        ) ?? $query;
+
+        return mb_substr(trim($query, " \t\n\r\0\x0B.,!?"), 0, 300);
+    }
+
     public static function isEnabled(): bool
     {
         if (! (bool) setting('ai_chat_pro_smart_image_enabled', true)) {
@@ -107,6 +146,7 @@ class SmartImageService
         return 'Search for and display relevant images alongside your response. '
             . 'Call this when the user mentions or asks about a named visual subject — a place, city, country, landmark, hotel, restaurant; a movie, film, TV show, or series; a song, album, or music artist; a person, actor, celebrity, athlete; a product, brand, car, or gadget; an animal breed, plant, or food dish; or visual topics like travel, architecture, interior design, fashion, art, nature, landscapes, historical events. '
             . 'Also call when the user says "show me", "what does X look like", "examples", "inspiration", "photos of", or similar. '
+            . 'ATTACHMENT EXCEPTION — when the user asks you to analyze, describe, identify, explain, or give feedback on an image they attached or uploaded, use that image directly and do NOT call search_images for similar or unrelated images. Only search for images when the user explicitly requests additional external images, examples, or visual references. '
             . 'CRITICAL EXCEPTION — do NOT call for writing/business tasks even if they contain a proper noun. If the user is asking you to WRITE, DRAFT, COMPOSE, GENERATE TEXT, or PRODUCE copy (cold emails, sales outreach, marketing copy, blog posts, essays, scripts, social posts, product descriptions, ads, resumes, cover letters), the task is a writing task — do NOT call search_images. Example: "write a cold email to Tesla" is a writing task, skip it. "Tell me about Tesla" or "Tesla Model S" is a visual subject, call it. '
             . 'Also do NOT call for: coding, math, debugging, translation, summarization of user-provided text, definitions of abstract concepts, or purely textual/logical tasks. '
             . 'Do NOT call if the user asks to CREATE/GENERATE/DRAW/MAKE a new image (use generate_image for that). '
@@ -162,7 +202,9 @@ class SmartImageService
      */
     public static function systemPromptAddition(): string
     {
-        return 'RULE — search_images: Call the search_images function whenever the user mentions a named visual subject. This includes: '
+        return 'For an explicit request to show, find, or include existing images, the application automatically searches for and displays images alongside your answer. You do not need to invoke a tool for this. Never confuse image search with image generation, and never say image display is unavailable when the user asked to view existing images. Answer the subject concisely; only claim that image results are available when the system provides them. '
+            . 'ATTACHMENT EXCEPTION — if the user asks you to analyze, describe, identify, explain, or give feedback on an image they attached or uploaded, use that image directly and do NOT call search_images for similar or unrelated images. This exception takes precedence over the visual-subject rules below. Only search for images when the user explicitly requests additional external images, examples, or visual references. '
+            . 'RULE — search_images: Call the search_images function whenever the user mentions a named visual subject. This includes: '
             . 'a specific movie or film ("The Godfather", "Inception"), TV show ("Breaking Bad"), song, album, or music artist; '
             . 'a person, celebrity, actor, athlete ("Elon Musk", "Marlon Brando"); '
             . 'a place, city, country, landmark, hotel, restaurant ("Paris", "Tokyo", "Eiffel Tower"); '

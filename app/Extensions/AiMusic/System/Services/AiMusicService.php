@@ -52,7 +52,7 @@ class AiMusicService
             }
 
             $response = Http::withHeaders([
-                'Authorization' => "Bearer $this->apiKey",
+                'Authorization' => 'Bearer ' . $this->apiKey,
             ])->attach('file', $fileContent, $fileName)
                 ->post(self::BASE_URL . self::UPLOAD_VOICE_URL, [
                     'purpose' => $request->input('purpose'),
@@ -122,7 +122,7 @@ class AiMusicService
                 'message'     => __('Audio generated successfully'),
                 'status'      => 'complete',
                 'audio_url'   => $path,
-                'trace_id'    => $res['trace_id'],
+                'trace_id'    => $data['trace_id'] ?? $data['data']['trace_id'] ?? (string) \Illuminate\Support\Str::uuid(),
             ];
 
         } catch (Exception $e) {

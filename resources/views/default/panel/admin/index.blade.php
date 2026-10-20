@@ -7,19 +7,39 @@
     $popular_tools_data =  cache()->get('popular_tools_data');
     $currencySymbol = currency()->symbol;
 
-    $premium_features = [
-        'VIP Support' => 'Get instant help whenever you need it.',
-        'Access to All Current & Future Extensions <span class="font-bold text-[#6977DE]">worth $2000+</span>' => 'Always stay ahead with the latest features.',
-        'Access to All Current & Future Themes <span class="font-bold text-[#6977DE]">worth $670</span>' => 'Always stay ahead with the latest designs.',
-        'Get the Mobile App Free in Your 4th Month! <span class="font-bold text-[#6977DE]">worth $3000+</span>' =>
-         'Enjoy a free mobile app after your fourth month of subscription.',
-        '10 Hours of Custom Development Every Month' => 'Tailored improvements, at no extra cost.',
-        'Direct Communication with Our Development Team' => 'No middlemen, just solutions.',
-        'Exclusive Extensions Not Available to Others' => 'Stay ahead of competition, reserved for VIPs only.',
-        'Complimentary Logo Design' => 'A custom logo to elevate your brand.',
-        'Personalized Onboarding Assistance' => 'We’ll help you get up and running smoothly.',
-        'Free Setup & Configuration Services' => 'Let us handle the technical details for you.',
-    ];
+    /*
+    |--------------------------------------------------------------------------
+    | Garad AI Admin Dashboard
+    |--------------------------------------------------------------------------
+    */
+    $garadVersion = null;
+
+    try {
+        $garadVersion = filled($setting?->script_version)
+            ? format_double($setting->script_version)
+            : null;
+    } catch (\Throwable $e) {
+        $garadVersion = null;
+    }
+
+    if (blank($garadVersion) && file_exists(base_path('version.txt'))) {
+        $garadVersion = trim((string) file_get_contents(base_path('version.txt')));
+    }
+
+    $garadVersion = $garadVersion ?: __('Current');
+
+    $garadLastUpdatedAt = null;
+
+    try {
+        if (file_exists(base_path('version.txt'))) {
+            $garadLastUpdatedAt = \Illuminate\Support\Carbon::createFromTimestamp(
+                filemtime(base_path('version.txt'))
+            );
+        }
+    } catch (\Throwable $e) {
+        $garadLastUpdatedAt = null;
+    }
+
 @endphp
 
 @extends('panel.layout.app', ['disable_tblr' => true, 'disable_titlebar' => true])
@@ -32,25 +52,155 @@
             stroke: hsl(var(--secondary));
             paint-order: stroke;
         }
+
+        /* Garad AI Admin Hero - plain CSS so deployment does not require Tailwind rebuild */
+        .garad-admin-hero {
+            position: relative;
+            overflow: hidden;
+            min-height: 292px;
+            border: 1px solid hsl(var(--border));
+            border-radius: 18px;
+            background:
+                radial-gradient(circle at 84% 20%, hsl(var(--primary) / 0.14), transparent 34%),
+                radial-gradient(circle at 70% 100%, rgba(124, 58, 237, 0.10), transparent 34%),
+                hsl(var(--background));
+            transition: border-color .18s ease, box-shadow .18s ease;
+        }
+
+        .garad-admin-hero:hover {
+            border-color: hsl(var(--primary) / .28);
+            box-shadow: 0 18px 55px hsl(var(--primary) / .08);
+        }
+
+        .garad-admin-hero-grid {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: minmax(0, 1.08fr) minmax(360px, .92fr);
+            min-height: 292px;
+        }
+
+        .garad-admin-hero-content {
+            position: relative;
+            z-index: 4;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 34px 36px;
+        }
+
+        .garad-admin-hero-media {
+            position: relative;
+            min-height: 292px;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at center, hsl(var(--primary) / .11), transparent 56%),
+                hsl(var(--background));
+        }
+
+        .garad-admin-hero-media video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            object-position: center 35%;
+            opacity: 1;
+        }
+
+        .garad-admin-hero-media::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(
+                90deg,
+                hsl(var(--background)) 0%,
+                hsl(var(--background) / .62) 14%,
+                transparent 46%
+            );
+        }
+
+        .garad-admin-video-fallback {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 36px;
+        }
+
+        .garad-admin-video-fallback.is-visible {
+            display: flex;
+        }
+
+        .garad-admin-video-fallback-inner {
+            display: flex;
+            width: 180px;
+            height: 180px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid hsl(var(--primary) / .18);
+            border-radius: 38px;
+            background: hsl(var(--primary) / .06);
+            box-shadow: 0 24px 80px hsl(var(--primary) / .12);
+        }
+
+        .garad-admin-widget-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 2.75rem;
+        }
+
+        @media (max-width: 1199px) {
+            .garad-admin-hero-grid {
+                grid-template-columns: minmax(0, 1fr) minmax(310px, .82fr);
+            }
+
+            .garad-admin-hero-content {
+                padding: 30px;
+            }
+        }
+
+        @media (max-width: 991px) {
+            .garad-admin-hero-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .garad-admin-hero-media {
+                min-height: 260px;
+            }
+
+            .garad-admin-hero-media::after {
+                background: linear-gradient(
+                    180deg,
+                    hsl(var(--background)) 0%,
+                    transparent 32%
+                );
+            }
+
+            .garad-admin-widget-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .garad-admin-hero-content {
+                padding: 24px 20px;
+            }
+
+            .garad-admin-hero-media {
+                min-height: 220px;
+            }
+        }
     </style>
 @endpush
 
 @section('content')
     <div class="py-10">
-		@if($vip_membership && data_get($vip_membership, 'stripe_status') === 'past_due' && data_get($vip_membership, 'updateLink'))
-			<x-alert variant="danger" class="mb-6" size="md">
-				<p>
-					{{ data_get($vip_membership, 'text') }}
-				</p>
-				<a
-					target="_blank"
-					class="text-blue-600"
-					href="{{ data_get($vip_membership, 'updateLink') }}"
-				>@lang('Update Payment Information')</a>
-			</x-alert>
-		@endif
-
-        @if ($gatewayError == true)
+@if ($gatewayError == true)
             <x-alert class="mb-11">
                 <p>
                     {{ __('Gateway is set to use sandbox. Please set mode to development!') }}<br><br>
@@ -100,9 +250,9 @@
                     <div class="lqd-user-menu-list">
                         <ol class="lqd-menu-list flex flex-col gap-2">
                             @foreach ( cache()->get('dashboard_widgets', []) as $widget)
-								@if($widget->name === \App\Enums\DashboardWidget::PREMIUM_ADVANTAGES)
-									@continue
-								@endif
+								@if ($widget->name === \App\Enums\DashboardWidget::PREMIUM_ADVANTAGES)
+                                    @continue
+                                @endif
 
                                 <li
                                     class="group/item text-xs font-medium"
@@ -155,51 +305,113 @@
         {{-- end: brandh-header-caption --}}
 
         <div class="flex flex-col gap-11">
-            {{-- begin: brand --}}
-            <x-card
-                class="overflow-hidden px-2 py-4 hover:-translate-y-1 hover:bg-foreground/5"
-                variant="outline"
-                size="lg"
-            >
-                <div class="relative z-1 w-full lg:w-1/2">
-                    <h2 class="mb-2.5 font-bold">
-                        @lang('Marketplace is here.')
-                    </h2>
-                    <p class="mb-0 text-sm font-medium text-foreground/80">
-                        @lang('Extend the capabilities of MagicAI, explore new designs and unlock new horizons.')
-                    </p>
+
+            {{-- begin: Garad AI hero --}}
+            <div class="garad-admin-hero">
+                <div class="garad-admin-hero-grid">
+                    <div class="garad-admin-hero-content">
+                        <div class="mb-5 flex flex-wrap items-center gap-3">
+                            <div class="flex h-11 items-center rounded-xl border bg-background/80 px-3">
+                                <x-header-logo />
+                            </div>
+
+                            <span class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
+                                <span class="size-1.5 rounded-full bg-green-500"></span>
+                                {{ __('Admin Control Center') }}
+                            </span>
+                        </div>
+
+                        <h2 class="mb-3 max-w-2xl text-2xl font-bold leading-tight sm:text-3xl">
+                            {{ __('Run Garad AI from one intelligent control center.') }}
+                        </h2>
+
+                        <p class="mb-0 max-w-xl text-sm leading-6 text-foreground/65">
+                            {{ __('Monitor the platform, manage users, review AI activity and access the core Garad AI administration tools from one place.') }}
+                        </p>
+
+                        <div class="mt-6 flex flex-wrap items-center gap-2.5">
+                            @if (\Illuminate\Support\Facades\Route::has('dashboard.user.openai.chat.pro.index'))
+                                <x-button
+                                    href="{{ route('dashboard.user.openai.chat.pro.index') }}"
+                                    variant="primary"
+                                >
+                                    <x-tabler-message-circle-2 class="size-4" />
+                                    {{ __('Open Chat Pro') }}
+                                </x-button>
+                            @endif
+
+                            @if (\Illuminate\Support\Facades\Route::has('dashboard.admin.users.index'))
+                                <x-button
+                                    href="{{ route('dashboard.admin.users.index') }}"
+                                    variant="outline"
+                                >
+                                    <x-tabler-users class="size-4" />
+                                    {{ __('Manage Users') }}
+                                </x-button>
+                            @endif
+
+                            <div class="flex items-center gap-2 rounded-xl border bg-background/70 px-3 py-2 text-xs">
+                                <x-tabler-code-circle class="size-4 text-primary" />
+                                <span class="text-foreground/50">{{ __('Version') }}</span>
+                                <strong>{{ $garadVersion }}</strong>
+                            </div>
+                        </div>
+
+                        @if ($garadLastUpdatedAt)
+                            <div class="mt-4 flex items-center gap-1.5 text-[10.5px] text-foreground/45">
+                                <x-tabler-refresh class="size-3.5" />
+                                <span>
+                                    {{ __('Last platform update') }}:
+                                    {{ $garadLastUpdatedAt->diffForHumans() }}
+                                    ·
+                                    {{ $garadLastUpdatedAt->format('d M Y, H:i') }}
+                                </span>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="garad-admin-hero-media" id="garad-admin-hero-media">
+                        <video
+                            id="garad-admin-hero-video"
+                            autoplay
+                            muted
+                            loop
+                            playsinline
+                            preload="auto"
+                            poster=""
+                        >
+                            <source
+                                src="{{ asset('themes/default/assets/video/garad/garad-ai-admin-hero.mp4') }}?v={{ @filemtime(public_path('themes/default/assets/video/garad/garad-ai-admin-hero.mp4')) ?: time() }}"
+                                type="video/mp4"
+                            >
+                        </video>
+
+                        <div
+                            class="garad-admin-video-fallback"
+                            id="garad-admin-video-fallback"
+                        >
+                            <div class="garad-admin-video-fallback-inner">
+                                <x-header-logo />
+                            </div>
+                        </div>
+
+                        <div class="absolute bottom-5 end-5 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[10px] font-semibold text-white backdrop-blur-md">
+                            <span class="size-1.5 rounded-full bg-green-400"></span>
+                            {{ __('Garad AI') }}
+                        </div>
+                    </div>
                 </div>
-                <figure
-                    class="absolute end-0 top-full max-w-md max-lg:-translate-y-16 lg:-end-24 lg:-top-16"
-                    aria-hidden="true"
-                >
-                    <img
-                        class="w-full"
-                        alt="{{ __('marketplace') }}"
-                        width="857"
-                        height="470"
-                        loading="lazy"
-                        decoding="async"
-                        src="{{ custom_theme_url('/assets/img/misc/dash-marketplace-announce.png') }}"
-                    >
-                </figure>
-                <a
-                    class="absolute inset-0 z-1 inline-block overflow-hidden text-start -indent-96"
-                    href="{{ route('dashboard.admin.marketplace.index') }}"
-                >
-                    {{ __('Explore Marketplace') }}
-                </a>
-            </x-card>
-            {{-- end: brand --}}
+            </div>
+            {{-- end: Garad AI hero --}}
 
             {{-- begin: group-widgets --}}
-            <div class="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-11">
+            <div class="garad-admin-widget-grid">
                 @php
                     $widgets =  cache()->get('dashboard_widgets', []);
                 @endphp
 
                 @foreach ($widgets as $widget)
-                    @if ($widget->name === \App\Enums\DashboardWidget::PREMIUM_ADVANTAGES && \App\Helpers\Classes\Helper::isUserVIP())
+                    @if ($widget->name === \App\Enums\DashboardWidget::PREMIUM_ADVANTAGES)
                         @continue
                     @endif
 
@@ -1169,4 +1381,45 @@
             // End New Customer
         })();
     </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const video = document.getElementById('garad-admin-hero-video');
+            const fallback = document.getElementById('garad-admin-video-fallback');
+
+            if (!video) return;
+
+            const showFallback = () => {
+                if (fallback) {
+                    fallback.classList.add('is-visible');
+                }
+                video.style.display = 'none';
+            };
+
+            video.addEventListener('loadeddata', function () {
+                if (fallback) {
+                    fallback.classList.remove('is-visible');
+                }
+
+                video.style.display = 'block';
+
+                const playPromise = video.play();
+
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch(function () {
+                        // The video remains visible even if browser autoplay is blocked.
+                    });
+                }
+            });
+
+            video.addEventListener('error', showFallback);
+
+            window.setTimeout(function () {
+                if (video.readyState === 0) {
+                    showFallback();
+                }
+            }, 5000);
+        });
+    </script>
+
 @endpush

@@ -26,33 +26,77 @@
         $fullModels = array_merge($fullModels, $openRouterModels);
     }
 
-    $fullModels = collect($fullModels)->unique('value')->values();
+    $fullModels = collect($fullModels)
+        ->filter(fn ($model) => filled(is_object($model) ? ($model->value ?? null) : $model))
+        ->unique(function ($model) {
+            return (string) (is_object($model) ? ($model->value ?? '') : $model);
+        })
+        ->values();
+
     $activeModels = collect($fullModels)
         ->filter(function ($model) {
-            $driver = \App\Domains\Entity\Facades\Entity::driver(EntityEnum::tryFrom($model?->value));
-            return $driver->isUnlimitedCredit() || $driver->creditBalance() > 0;
+            try {
+                $modelValue = (string) (is_object($model) ? ($model->value ?? '') : $model);
+                $entity = EntityEnum::tryFrom($modelValue);
+                if (! $entity) {
+                    try {
+                        $entity = EntityEnum::fromSlug($modelValue);
+                    } catch (\Throwable) {
+                        $entity = null;
+                    }
+                }
+
+                if (! $entity) {
+                    return true;
+                }
+
+                $driver = \App\Domains\Entity\Facades\Entity::driver($entity);
+
+                return $driver->isUnlimitedCredit() || $driver->creditBalance() > 0;
+            } catch (\Throwable) {
+                return true;
+            }
         })
         ->values();
     $defaultDriver = \App\Domains\Entity\Facades\Entity::driver(EntityEnum::tryFrom($defaultModel?->value));
     $selectedModel = $defaultDriver;
     if (!$defaultDriver->isUnlimitedCredit() && $defaultDriver->creditBalance() <= 0) {
         foreach ($fullModels as $model) {
-            $driver = \App\Domains\Entity\Facades\Entity::driver(EntityEnum::tryFrom($model?->value));
-            if ($driver->isUnlimitedCredit() || $driver->creditBalance() > 0) {
-                $selectedModel = $driver;
-                break;
+            try {
+                $modelValue = (string) (is_object($model) ? ($model->value ?? '') : $model);
+                $enum = EntityEnum::tryFrom($modelValue);
+                if (! $enum) {
+                    try {
+                        $enum = EntityEnum::fromSlug($modelValue);
+                    } catch (\Throwable) {
+                        $enum = null;
+                    }
+                }
+                if (! $enum) {
+                    continue;
+                }
+                $driver = \App\Domains\Entity\Facades\Entity::driver($enum);
+                if ($driver->isUnlimitedCredit() || $driver->creditBalance() > 0) {
+                    $selectedModel = $driver;
+                    break;
+                }
+            } catch (\Throwable) {
+                continue;
             }
         }
     }
 
-    $currentUrl = url()->current();
-    $previousUrl = url()->previous();
-    $is_chat_pro =
-        \App\Helpers\Classes\MarketplaceHelper::isRegistered('ai-chat-pro') &&
-        (route('dashboard.user.openai.chat.pro.index') === $currentUrl ||
-            route('chat.pro') === $currentUrl ||
-            route('dashboard.user.openai.chat.pro.index') === $previousUrl ||
-            route('chat.pro') === $previousUrl);
+    $currentUrl = (string) url()->current();
+    $previousUrl = (string) url()->previous();
+    $isChatProRequest =
+        request()->routeIs('dashboard.user.openai.chat.pro.*') ||
+        request()->routeIs('chat.pro') ||
+        request()->is('dashboard/user/openai/chat/pro*') ||
+        str_contains($currentUrl, '/openai/chat/pro/') ||
+        str_contains($previousUrl, '/openai/chat/pro/');
+
+    $is_chat_pro = (bool) ($forceChatProPicker ?? false) ||
+        (\App\Helpers\Classes\MarketplaceHelper::isRegistered('ai-chat-pro') && $isChatProRequest);
 
     $isMultiModelExtensionEnabled = $is_chat_pro && MarketplaceHelper::isRegistered('multi-model') && setting('ai_chat_pro_multi_model_feature', '1') === '1';
     $isCouncilExtensionEnabled = $is_chat_pro && MarketplaceHelper::isRegistered('model-council') && setting('ai_chat_pro_model_council_feature', '1') === '1';
@@ -62,6 +106,9 @@
     $supportsMultiSelection = $isMultiModelExtensionEnabled || $isCouncilExtensionEnabled;
 @endphp
 
+@if ($is_chat_pro)
+    @include('components.select-ai-model-list-chat-pro')
+@else
 <div x-data="modelList">
     <x-modal
         class:modal="select-ai-model-modal"
@@ -318,6 +365,8 @@
         </x-slot:modal>
     </x-modal>
 </div>
+
+@endif
 
 @push('script')
     <script>

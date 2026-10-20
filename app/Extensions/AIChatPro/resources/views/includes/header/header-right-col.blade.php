@@ -1,4 +1,4 @@
-<div class="flex w-5/12 items-center justify-end gap-3.5 max-lg:grow max-sm:gap-2">
+<div class="hidden">
 
     @if ((!$user_is_premium || $app_is_demo) && !auth()->check())
         <x-modal
@@ -150,7 +150,7 @@
             class="size-[38px] border text-heading-foreground hover:transform-none hover:border-primary hover:bg-primary hover:text-primary-foreground hover:shadow-none hover:outline-primary"
             size="none"
             href="{{ route('dashboard.user.index') }}"
-            title="{{ __('Dashboard') }}"
+            title="{{ __('Dashboard') }}" data-garad-dashboard-button="1"
             variant="outline"
         >
             <x-tabler-grid-dots class="size-[18px]" />
@@ -170,7 +170,7 @@
 			class="hidden h-[38px] rounded-lg outline lg:inline-flex"
 			variant="outline"
 			hover-variant="primary"
-			href="{{ route('login', ['redirect' => 'chatPro']) }}"
+			href="{{ route('login', ['redirect' => 'chatPro']) }}" data-garad-login-button="1"
 		>
 			{!! __($fSetting->sign_in) !!}
 		</x-button>
@@ -179,7 +179,7 @@
 			class="h-[38px] rounded-lg outline"
 			variant="outline"
 			hover-variant="primary"
-			href="{{ route('register', ['redirect' => 'chatPro']) }}"
+			href="{{ route('register', ['redirect' => 'chatPro']) }}" data-garad-signup-button="1"
 		>
 			{!! __($fSetting->join_hub) !!}
 		</x-button>

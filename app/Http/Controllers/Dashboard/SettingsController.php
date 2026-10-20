@@ -116,7 +116,6 @@ class SettingsController extends Controller
             $settings->feature_ai_rewriter = $request->feature_ai_rewriter;
             $settings->feature_ai_chat_image = $request->feature_ai_chat_image;
             $settings->feature_ai_image = $request->feature_ai_image;
-            $settings_two->feature_ai_video = $request->feature_ai_video;
             $settings->feature_ai_chat = $request->feature_ai_chat;
             $settings->feature_ai_code = $request->feature_ai_code;
             $settings->feature_ai_speech_to_text = $request->feature_ai_speech_to_text;
@@ -351,7 +350,7 @@ class SettingsController extends Controller
             'Accept'            => 'application/json',
             'anthropic-version' => '2023-06-01',
         ])->post('https://api.anthropic.com/v1/messages', [
-            'model'      => EntityEnum::fromSlug(setting('anthropic_default_model', EntityEnum::ANTHROPIC_CLAUDE_3_5_HAIKU->slug()))?->value,
+            'model'      => EntityEnum::fromSlug(setting('anthropic_default_model', EntityEnum::CLAUDE_HAIKU_4_5->slug()))?->value,
             'max_tokens' => (int) setting('anthropic_max_output_length'),
             'messages'   => [
                 [
@@ -373,9 +372,9 @@ class SettingsController extends Controller
         $data = $request->validate([
             'anthropic_api_secret'        => 'required|string',
             'anthropic_default_model'     => 'required|string',
-            'anthropic_max_input_length'  => 'required|string',
+            'anthropic_max_input_length'  => 'sometimes|required|string',
             'anthropic_max_output_length' => 'required|string',
-            'anthropic_bedrock_model'     => 'string',
+            'anthropic_bedrock_model'     => 'nullable|string',
         ]);
 
         setting($data)->save();
@@ -735,13 +734,18 @@ class SettingsController extends Controller
     public function stablediffusionTest(): void
     {
         $settings = SettingTwo::getCache();
-        if ($settings->stable_diffusion_api_key === '') {
+        if (empty($settings->stable_diffusion_api_key)) {
             echo 'You must provide Stable Difussion API key.';
 
             return;
         }
 
         $apiKeys = explode(',', $settings->stable_diffusion_api_key);
+
+        $configuredModel = EntityEnum::tryFrom(
+            (string) ($settings->stablediffusion_default_model ?? $settings->stable_diffusion_default_model)
+        ) ?? EntityEnum::SD_3_5_LARGE;
+        $testModel = $configuredModel->isV2BetaSdEntity() ? $configuredModel : EntityEnum::SD_3_5_LARGE;
 
         foreach ($apiKeys as $apiKey) {
 
@@ -768,11 +772,12 @@ class SettingsController extends Controller
                 ],
                 [
                     'name'     => 'model',
-                    'contents' => 'sd3',
+                    'contents' => $testModel->value,
                 ],
             ];
 
             try {
+                // 'sd3' is the v2beta endpoint path, not the model id.
                 $response = $client->post('sd3', [
                     'headers'   => ['accept' => 'application/json'],
                     'multipart' => $sd3Payload,
@@ -836,6 +841,8 @@ class SettingsController extends Controller
                 'enabled_gpt_image_1'            => $request->enabled_gpt_image_1,
                 'enabled_gpt_image_1_5'          => $request->enabled_gpt_image_1_5,
                 'enabled_gpt_image_2'            => $request->enabled_gpt_image_2,
+                'enabled_gpt_image_2_5_sunburst' => $request->enabled_gpt_image_2_5_sunburst,
+                'enabled_gpt_image_2_5_flare'    => $request->enabled_gpt_image_2_5_flare,
                 'openai_reasoning_models_effort' => $request->openai_reasoning_models_effort,
             ])->save();
 

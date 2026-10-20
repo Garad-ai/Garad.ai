@@ -114,6 +114,7 @@
 				'plan' => $plan ?? null,
 				'user' => $user ?? null,
 			])
+
 		</tbody>
 	</table>
 @endif

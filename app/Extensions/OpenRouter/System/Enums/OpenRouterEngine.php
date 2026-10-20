@@ -42,10 +42,10 @@ enum OpenRouterEngine: string implements WithStringBackedEnum
     public function label(): string
     {
         return match ($this) {
-            self::ANTHROPIC_CLAUDE_3_5_HAIKU_20241022                => __('Anthropic: Claude 3.5 Haiku (2024-10-22)'),
-            self::ANTHROPIC_CLAUDE_3_5_HAIKU_20241022_SELF_MODERATED => __('Anthropic: Claude 3.5 Haiku (2024-10-22) (self-moderated)'),
-            self::ANTHROPIC_CLAUDE_3_5_HAIKU                         => __('Anthropic: Claude 3.5 Haiku'),
-            self::ANTHROPIC_CLAUDE_3_5_HAIKU_SELF_MODERATED          => __('Anthropic: Claude 3.5 Haiku (self-moderated)'),
+            self::ANTHROPIC_CLAUDE_3_5_HAIKU_20241022                => __('Anthropic: Claude 3.5 Haiku (2024-10-22; routes to Haiku 4.5)'),
+            self::ANTHROPIC_CLAUDE_3_5_HAIKU_20241022_SELF_MODERATED => __('Anthropic: Claude 3.5 Haiku (2024-10-22; routes to standard Haiku 4.5) (self-moderated beta unavailable)'),
+            self::ANTHROPIC_CLAUDE_3_5_HAIKU                         => __('Anthropic: Claude 3.5 Haiku (routes to Haiku 4.5)'),
+            self::ANTHROPIC_CLAUDE_3_5_HAIKU_SELF_MODERATED          => __('Anthropic: Claude 3.5 Haiku (routes to standard Haiku 4.5) (self-moderated beta unavailable)'),
             self::LUMIMAID_V02_70B                                   => __('Lumimaid v0.2 70B'),
             self::MAGNUM_V4_72B                                      => __('Magnum v4 72B'),
             self::XAI_GROK_BETA                                      => __('xAI: Grok Beta'),

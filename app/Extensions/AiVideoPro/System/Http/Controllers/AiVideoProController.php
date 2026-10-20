@@ -5,6 +5,7 @@ namespace App\Extensions\AiVideoPro\System\Http\Controllers;
 use App\Domains\Engine\Services\FalAIService;
 use App\Domains\Entity\Enums\EntityEnum;
 use App\Domains\Entity\Facades\Entity;
+use App\Extensions\AIChatPro\System\Http\Controllers\ReactChatController;
 use App\Extensions\AiVideoPro\System\Http\Requests\StoreAiVideoProRequest;
 use App\Extensions\AiVideoPro\System\Jobs\DownloadVideoToLocalJob;
 use App\Extensions\AiVideoPro\System\Models\UserFall;
@@ -37,6 +38,8 @@ class AiVideoProController extends Controller
 
     private const RANDOM_STRING_LENGTH = 12;
 
+    private const JOB_TIMEOUT_MINUTES = 60;
+
     private PackageFalAIService $falAIService;
 
     public function __construct()
@@ -57,7 +60,11 @@ class AiVideoProController extends Controller
         $todayVideos = $videos->filter(fn ($v) => $v->created_at->isToday())->values();
         $previousVideos = $videos->filter(fn ($v) => ! $v->created_at->isToday())->values();
 
-        $inProgress = $videos->filter(fn ($v) => in_array($v->status, ['IN_QUEUE', 'queued']))->pluck('id')->toArray();
+        $inProgress = $videos->filter(function ($video) {
+            $status = strtolower(trim((string) $video->status));
+
+            return ! in_array($status, ['complete', 'completed', 'error', 'failed', 'cancelled', 'canceled'], true);
+        })->pluck('id')->toArray();
 
         $completedVideos = $videos->filter(fn ($v) => $v->status === 'complete')->values();
         $videosJson = $completedVideos->map(fn ($v) => [
@@ -129,6 +136,109 @@ class AiVideoProController extends Controller
     }
 
     /**
+     * Reuse the existing AI Video Pro generation pipeline from Chat Pro.
+     * The caller is responsible for supplying only fields from the selected
+     * ModelConfigurationService feature.
+     */
+    public function generateFromChatPro(array $validated): array
+    {
+        $this->isAjax = true;
+
+        if (! auth()->check()) {
+            return ['success' => false, 'message' => __('Please sign in to generate videos.')];
+        }
+
+        if (Helper::appIsDemo()) {
+            return ['success' => false, 'message' => __('This feature is disabled in demo mode.')];
+        }
+
+        if (! ApiHelper::setFalAIKey()) {
+            return ['success' => false, 'message' => __('Please set FAL AI key.')];
+        }
+
+        $action = (string) ($validated['action'] ?? '');
+        $subModel = (string) ($validated['sub_model_value'] ?? '');
+        $feature = (string) ($validated['feature'] ?? '');
+        $config = ModelConfigurationService::getConfig();
+
+        if (! isset($config[$action]['subModels'][$subModel]['features'][$feature])) {
+            return ['success' => false, 'message' => __('The requested video model configuration is not available.')];
+        }
+
+        if (($config[$action]['isActive'] ?? true) === false || ($config[$action]['subModels'][$subModel]['isActive'] ?? true) === false) {
+            return ['success' => false, 'message' => __('The requested video model is currently disabled.')];
+        }
+
+        try {
+            $entityEnum = EntityEnum::fromSlug($feature);
+            $requiredPlan = app(ReactChatController::class)->mediaPlanLock(
+                $entityEnum->value,
+                $entityEnum->engine()->value,
+                'video',
+            );
+
+            if ($requiredPlan !== null) {
+                return [
+                    'success' => false,
+                    'message' => __('This video model requires the :plan plan or higher.', ['plan' => $requiredPlan]),
+                    'requiredPlan' => $requiredPlan,
+                ];
+            }
+
+            $driver = $this->calculateCredits($action, $entityEnum, $validated);
+            $driver->redirectIfNoCreditBalance();
+            $response = $this->processGeneration($validated, $entityEnum, $driver);
+
+            if ($response instanceof JsonResponse) {
+                return (array) $response->getData(true);
+            }
+
+            return ['success' => false, 'message' => __('Video generation returned an unexpected response.')];
+        } catch (Exception $e) {
+            Log::error('Chat Pro video generation failed', [
+                'error'   => $e->getMessage(),
+                'action'  => $action,
+                'feature' => $feature,
+                'user_id' => auth()->id(),
+            ]);
+
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    public function videoStatusFromChatPro(int $videoId): array
+    {
+        if (! auth()->check()) {
+            return ['success' => false, 'message' => __('Please sign in to check video status.')];
+        }
+
+        $entry = UserFall::query()
+            ->where('user_id', auth()->id())
+            ->whereKey($videoId)
+            ->first();
+
+        if (! $entry) {
+            return ['success' => false, 'message' => __('Video not found.')];
+        }
+
+        if (! in_array($entry->status, ['complete', 'error'], true)) {
+            $this->checkVideoStatus(new Request(['ids' => [$videoId]]));
+            $entry->refresh();
+        }
+
+        return [
+            'success'          => $entry->status !== 'error',
+            'video_id'         => $entry->id,
+            'status'           => $entry->status,
+            'video_url'        => $entry->video_url,
+            'error_message'    => $entry->error_message,
+            'duration_seconds' => $entry->duration_seconds,
+            'resolution'       => $entry->resolution,
+            'aspect_ratio'     => $entry->aspect_ratio,
+        ];
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(StoreAiVideoProRequest $request): RedirectResponse|JsonResponse
@@ -145,6 +255,15 @@ class AiVideoProController extends Controller
 
         $validated = $request->validated();
         $entityEnum = EntityEnum::fromSlug($validated['feature']);
+        $requiredPlan = app(ReactChatController::class)->mediaPlanLock(
+            $entityEnum->value,
+            $entityEnum->engine()->value,
+            'video',
+        );
+
+        if ($requiredPlan !== null) {
+            return $this->errorResponse(__('This video model requires the :plan plan or higher.', ['plan' => $requiredPlan]), 403);
+        }
 
         try {
             $driver = $this->calculateCredits($validated['action'], $entityEnum, $validated);
@@ -182,6 +301,7 @@ class AiVideoProController extends Controller
             'minimax'             => 'handleMinimax',
             'grok-imagine-video'  => 'handleGrokImagineVideo',
             'seedance'            => 'handleSeedance',
+            'seedance-2.5'        => 'handleSeedance',
             'gemini-omni-flash'   => 'handleGeminiOmniFlash',
             'background-removal'  => 'handleBackgroundRemoval',
         ];
@@ -1083,10 +1203,10 @@ class AiVideoProController extends Controller
         ]);
     }
 
-    private function errorResponse(string $message): RedirectResponse|JsonResponse
+    private function errorResponse(string $message, int $status = 422): RedirectResponse|JsonResponse
     {
         if ($this->isAjax) {
-            return response()->json(['success' => false, 'message' => $message], 422);
+            return response()->json(['success' => false, 'message' => $message], $status);
         }
 
         return back()->with([
@@ -1137,6 +1257,22 @@ class AiVideoProController extends Controller
         $data = collect();
 
         foreach ($entries as $entry) {
+            if ($entry->created_at && $entry->created_at->lt(now()->subMinutes(self::JOB_TIMEOUT_MINUTES))) {
+                $data->push($this->markEntryAsError(
+                    $entry,
+                    __('Video generation timed out before the provider returned a usable result. Please try again.')
+                ));
+                continue;
+            }
+
+            if (blank($entry->request_id) && blank($entry->response_url)) {
+                $data->push($this->markEntryAsError(
+                    $entry,
+                    __('Video generation did not receive a valid provider job ID. Please try again.')
+                ));
+                continue;
+            }
+
             $result = match (true) {
                 str_starts_with($entry->model ?? '', 'sora')                          => $this->handleSoraEntry($entry),
                 str_starts_with($entry->model ?? '', 'veo3.1/')                       => $this->handleVeoEntry($entry),
@@ -1147,6 +1283,7 @@ class AiVideoProController extends Controller
                 str_starts_with($entry->model ?? '', 'kling-video/v3/standard/')      => $this->handleKlingV3Entry($entry),
                 str_starts_with($entry->model ?? '', 'xai/grok-imagine-video/')       => $this->handleGrokImagineVideoEntry($entry),
                 str_starts_with($entry->model ?? '', 'bytedance/seedance-2.0/')       => $this->handleSeedanceEntry($entry),
+                str_starts_with($entry->model ?? '', 'bytedance/seedance-2.5/')       => $this->handleSeedanceEntry($entry, EntityEnum::SEEDANCE_2_5_TTV),
                 str_starts_with($entry->model ?? '', 'google/gemini-omni-flash')      => $this->handleGeminiOmniFlashEntry($entry),
                 str_starts_with($entry->model ?? '', 'veed/')                         => $this->handleVeedEntry($entry),
                 default                                                               => $this->handleFalEntry($entry),
@@ -1361,9 +1498,8 @@ class AiVideoProController extends Controller
         return null;
     }
 
-    private function handleSeedanceEntry($entry): ?array
+    private function handleSeedanceEntry($entry, EntityEnum $entity = EntityEnum::SEEDANCE_2_TTV): ?array
     {
-        $entity = EntityEnum::SEEDANCE_2_TTV;
 
         $check = $this->falAIService->textToVideoModel($entity)->checkStatus($entry->request_id)->getData();
         $status = strtoupper((string) ($check->resData->status ?? ''));
@@ -1543,6 +1679,17 @@ class AiVideoProController extends Controller
         return [
             'divId' => "video-{$entry->id}",
             'html'  => view('ai-video-pro::partials.video-item', ['entry' => $entry])->render(),
+            'videoData' => [
+                'id' => $entry->id,
+                'status' => $entry->status,
+                'video_url' => $entry->video_url,
+                'error_message' => $entry->error_message,
+                'prompt' => $entry->prompt,
+                'model' => $entry->model,
+                'duration_seconds' => $entry->duration_seconds,
+                'resolution' => $entry->resolution,
+                'aspect_ratio' => $entry->aspect_ratio,
+            ],
         ];
     }
 

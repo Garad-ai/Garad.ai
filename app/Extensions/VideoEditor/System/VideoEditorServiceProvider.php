@@ -118,6 +118,7 @@ class VideoEditorServiceProvider extends ServiceProvider
                             $router->post('generate-voice', 'generateVoice')->name('generateVoice')->middleware('throttle:5,1');
 
                             // Music — rate-limited
+                            $router->get('music-models', 'musicModels')->name('musicModels');
                             $router->post('generate-music', 'generateMusic')->name('generateMusic')->middleware('throttle:5,1');
                         });
 

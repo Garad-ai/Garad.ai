@@ -14,6 +14,8 @@ class UserOpenaiChatMessage extends Model
 {
     use HasFactory;
 
+    private static array $columnsByConnection = [];
+
     protected $table = 'user_openai_chat_messages';
 
     protected $fillable = [
@@ -47,33 +49,22 @@ class UserOpenaiChatMessage extends Model
     {
         parent::__construct($attributes);
 
-        if (Schema::hasColumn($this->getTable(), 'model_slug')) {
-            $this->fillable[] = 'model_slug';
-        }
-
-        if (Schema::hasColumn($this->getTable(), 'shared_uuid')) {
-            $this->fillable[] = 'shared_uuid';
-        }
-
-        if (Schema::hasColumn($this->getTable(), 'is_council')) {
-            $this->fillable[] = 'is_council';
-        }
-
-        if (Schema::hasColumn($this->getTable(), 'council_response')) {
-            $this->fillable[] = 'council_response';
-        }
-
-        if (Schema::hasColumn($this->getTable(), 'used_skills')) {
-            $this->fillable[] = 'used_skills';
-        }
-
-        if (Schema::hasColumn($this->getTable(), 'used_connectors')) {
-            $this->fillable[] = 'used_connectors';
-        }
-
-        if (Schema::hasColumn($this->getTable(), 'highlight_context')) {
-            $this->fillable[] = 'highlight_context';
-        }
+        $connection = $this->getConnection();
+        $cacheKey = $connection->getName() . ':' . $this->getTable();
+        $columns = self::$columnsByConnection[$cacheKey]
+            ??= $connection->getSchemaBuilder()->getColumnListing($this->getTable());
+        $this->fillable = array_values(array_unique(array_merge(
+            $this->fillable,
+            array_intersect([
+                'model_slug',
+                'shared_uuid',
+                'is_council',
+                'council_response',
+                'used_skills',
+                'used_connectors',
+                'highlight_context',
+            ], $columns)
+        )));
     }
 
     protected static function booted(): void

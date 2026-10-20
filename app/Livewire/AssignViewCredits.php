@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Domains\Engine\Enums\EngineEnum;
 use App\Domains\Entity\Enums\EntityEnum;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Livewire\Component;
@@ -49,7 +50,7 @@ class AssignViewCredits extends Component
             $groupTotal = array_sum($groupCost);
 
             $this->totals['engine'][$groupKey] = [
-                'enum'  => EngineEnum::fromSlug($groupKey),
+                'enum' => EngineEnum::fromSlug($groupKey),
                 'total' => $groupTotal,
             ];
             $total += $groupTotal;
@@ -64,7 +65,17 @@ class AssignViewCredits extends Component
 
         foreach ($entities as $groupKey => $groupEntities) {
             foreach ($groupEntities as $key => $entity) {
-                $unitPrice = EntityEnum::fromSlug($key)?->unitPrice();
+                $model = EntityEnum::tryFrom(str_replace('__', '.', (string) $key));
+                if (! $model) {
+                    Log::warning('Ignoring unknown model in user credit settings.', [
+                        'engine' => $groupKey,
+                        'model' => $key,
+                    ]);
+
+                    continue;
+                }
+
+                $unitPrice = $model->unitPrice();
 
                 $unitPrice = is_float($unitPrice) ? $unitPrice : 0.00;
 
@@ -94,8 +105,8 @@ class AssignViewCredits extends Component
         return collect($this->enabledAiEngines)->flatMap(function (EngineEnum $engine) {
             return collect($engine->models())->mapWithKeys(function (EntityEnum $model) use ($engine) {
                 return [
-                    "entities.{$engine->slug()}.{$model->slug()}.credit.numeric"      => str_replace(':aiModel', $model->value, 'The :aiModel credit must be a valid number.'),
-                    "entities.{$engine->slug()}.{$model->slug()}.credit.min"          => str_replace(':aiModel', $model->value, 'The :aiModel credit must be at least :min.'),
+                    "entities.{$engine->slug()}.{$model->slug()}.credit.numeric" => str_replace(':aiModel', $model->value, 'The :aiModel credit must be a valid number.'),
+                    "entities.{$engine->slug()}.{$model->slug()}.credit.min" => str_replace(':aiModel', $model->value, 'The :aiModel credit must be at least :min.'),
                     "entities.{$engine->slug()}.{$model->slug()}.isUnlimited.boolean" => str_replace(':aiModel', $model->value, 'The :aiModel boolean value must be true or false.'),
                 ];
             });

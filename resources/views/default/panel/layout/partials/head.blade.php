@@ -119,6 +119,34 @@
          Alpine boots from the main app.js entry below. --}}
     @stack('script-before')
 
+    {{-- Livewire builds its update URL without the app sub-directory
+         (e.g. /livewire/update instead of /garad.ai/public/livewire/update). --}}
+    <script>
+        (function () {
+            var basePath = @json(rtrim((string) parse_url(url('/'), PHP_URL_PATH), '/'));
+            if (!basePath || !window.fetch) return;
+            var originalFetch = window.fetch;
+            window.fetch = function (input, init) {
+                if (typeof input === 'string' || input instanceof URL) {
+                    try {
+                        var s = new URL(String(input), location.origin);
+                        if (s.origin === location.origin && s.pathname.indexOf('/livewire/') === 0) {
+                            input = s.origin + basePath + s.pathname + s.search;
+                        }
+                    } catch (e) {}
+                } else if (input && typeof input.url === 'string') {
+                    try {
+                        var u = new URL(input.url, location.origin);
+                        if (u.origin === location.origin && u.pathname.indexOf('/livewire/') === 0) {
+                            input = new Request(u.origin + basePath + u.pathname + u.search, input);
+                        }
+                    } catch (e) {}
+                }
+                return originalFetch.call(this, input, init);
+            };
+        })();
+    </script>
+
     @vite(\App\Helpers\Classes\ThemeHelper::appJsPath())
 
     @if (setting('additional_custom_css') != null)

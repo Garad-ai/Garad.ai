@@ -87,7 +87,7 @@
 						$deepseekDrivers = \App\Domains\Entity\EntityStats::word()
 							->filterByEngine(\App\Domains\Engine\Enums\EngineEnum::DEEP_SEEK)
 							->list();
-						$current_deepseek_model = EntityEnum::fromSlug(setting('deepseek_default_model', EntityEnum::DEEPSEEK_CHAT->slug()))->slug();
+						$current_deepseek_model = EntityEnum::fromSlug(setting('deepseek_default_model', EntityEnum::DEEPSEEK_V4_PRO->slug()))->slug();
 					@endphp
 					<x-model-select-list-with-change-alert :listLabel="'Default Deepseek Word Model'"
 														   :listId="'deepseek_default_model'" currentModel="{{ $current_deepseek_model }}"

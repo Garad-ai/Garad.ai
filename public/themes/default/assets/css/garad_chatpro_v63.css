@@ -1,0 +1,72 @@
+/* Garad Chat Pro V6.3 — incremental UI polish. */
+:root{--garad-v63:#5e17ff;}
+
+/* User messages: one bubble only; never paint the large outer row. */
+.lqd-chat-v2 .lqd-chat-user-bubble{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  border-radius:0!important;
+  width:min(100%,920px)!important;
+  margin-inline:auto!important;
+  padding-inline:clamp(12px,2vw,26px)!important;
+  justify-content:flex-end!important;
+}
+.lqd-chat-v2 .lqd-chat-user-bubble>.chat-content-container{
+  width:auto!important;
+  max-width:min(72%,640px)!important;
+  margin-inline-start:auto!important;
+  margin-inline-end:0!important;
+  border-radius:20px!important;
+  box-shadow:none!important;
+}
+.lqd-chat-v2 .lqd-chat-user-bubble .chat-content{padding:11px 16px!important;line-height:1.55!important;}
+
+/* Keep uploaded/generated images readable instead of filling the whole page. */
+.lqd-chat-v2 .chat-content img,
+.lqd-chat-v2 .lqd-chat-image-bubble img.img-content,
+.lqd-chat-v2 .lqd-chat-user-bubble img.img-content{
+  display:block!important;
+  width:auto!important;
+  max-width:min(100%,420px)!important;
+  max-height:420px!important;
+  object-fit:contain!important;
+  border-radius:16px!important;
+  box-shadow:0 10px 28px rgba(15,23,42,.10)!important;
+}
+#chat-attachment-previews img{width:70px!important;height:70px!important;max-width:70px!important;max-height:70px!important;object-fit:cover!important;border-radius:12px!important;}
+
+/* Composer: compact, straight and balanced. */
+#chat_form{max-width:860px!important;margin-inline:auto!important;}
+#chat_form .lqd-chat-form-inputs-container{border:1px solid rgba(94,23,255,.20)!important;border-radius:26px!important;box-shadow:0 10px 34px rgba(15,23,42,.07)!important;overflow:visible!important;}
+#chat_form .lqd-chat-form-inputs-container:focus-within{border-color:rgba(94,23,255,.48)!important;box-shadow:0 12px 38px rgba(15,23,42,.09),0 0 0 3px rgba(94,23,255,.06)!important;}
+#chat_form #prompt{resize:none!important;overflow-y:auto!important;min-height:58px!important;line-height:1.5!important;}
+
+/* @ create picker */
+#garad-v63-at-menu{position:absolute;left:12px;bottom:calc(100% + 10px);z-index:120;display:none;width:250px;max-width:calc(100vw - 30px);padding:7px;border:1px solid rgba(94,23,255,.16);border-radius:15px;background:rgba(255,255,255,.98);box-shadow:0 20px 50px rgba(15,23,42,.18);backdrop-filter:blur(16px);}
+.dark #garad-v63-at-menu{background:rgba(18,23,33,.98);}
+#garad-v63-at-menu.is-open{display:block;}
+.garad-v63-at-title{padding:7px 9px 8px;font-size:11px;color:#64748b;}
+.garad-v63-at-item{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border-radius:10px;font-size:13px;text-align:left;}
+.garad-v63-at-item:hover,.garad-v63-at-item.is-active{background:rgba(94,23,255,.08);color:var(--garad-v63);}
+.garad-v63-at-item code{padding:3px 7px;border-radius:999px;background:rgba(94,23,255,.08);font-weight:700;color:inherit;}
+
+/* Automatic long-running media card. */
+.garad-v63-job-card{max-width:520px;margin:10px 0 18px;padding:14px 15px;border:1px solid rgba(94,23,255,.16);border-radius:16px;background:rgba(94,23,255,.045);}
+.garad-v63-job-head{display:flex;align-items:center;gap:9px;font-weight:700;margin-bottom:7px;}
+.garad-v63-spinner{width:15px;height:15px;border-radius:50%;border:2px solid rgba(94,23,255,.22);border-top-color:var(--garad-v63);animation:garad-v63-spin .9s linear infinite;}
+.garad-v63-job-card.is-done .garad-v63-spinner{display:none;}
+.garad-v63-job-status{font-size:13px;line-height:1.55;color:inherit;opacity:.82;}
+.garad-v63-job-media{margin-top:10px;overflow:hidden;border-radius:12px;}
+.garad-v63-job-media video{display:block;width:100%;max-height:380px;background:#000;border-radius:12px;}
+.garad-v63-job-media a{display:inline-flex;margin-top:8px;color:var(--garad-v63)!important;font-weight:700;text-decoration:none!important;}
+@keyframes garad-v63-spin{to{transform:rotate(360deg)}}
+
+@media(max-width:767px){
+  .lqd-chat-v2 .lqd-chat-user-bubble>.chat-content-container{max-width:88vw!important;}
+  .lqd-chat-v2 .chat-content img,.lqd-chat-v2 .lqd-chat-image-bubble img.img-content{max-width:min(100%,320px)!important;max-height:360px!important;}
+}
+.garad-v63-job-card{position:relative;overflow:hidden;}
+.garad-v63-job-card:not(.is-done)::after{content:"";position:absolute;inset:0;transform:translateX(-120%);background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.38) 48%,transparent 75%);animation:garad-v63-shimmer 1.8s ease-in-out infinite;pointer-events:none;}
+.dark .garad-v63-job-card:not(.is-done)::after{background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.10) 48%,transparent 75%);}
+@keyframes garad-v63-shimmer{to{transform:translateX(120%)}}

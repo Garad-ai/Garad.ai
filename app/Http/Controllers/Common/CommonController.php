@@ -180,31 +180,97 @@ class CommonController extends Controller
 
         $images = [];
         $others = [];
+        $names = [];
+        $allowedChatUploadExtensions = [
+            'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp',
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'json', 'xml', 'html', 'htm', 'md', 'ppt', 'pptx',
+            'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm', 'ogg', 'flac', 'aac', 'mov', 'mkv', 'avi', 'm4v',
+        ];
+        $imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'];
 
-        foreach ($request->input('files', []) as $file) {
-            $name = $file['name'] ?? 'file';
-            $base64Data = $file['data'] ?? null;
-
-            if (! $base64Data) {
+        foreach ((array) $request->input('files', []) as $file) {
+            if (is_object($file)) {
+                $file = (array) $file;
+            }
+            if (! is_array($file)) {
                 continue;
             }
 
-            if (preg_match('/^data:([^;]+);base64,(.+)$/', $base64Data, $matches)) {
-                $mimeType = $matches[1];
-                $rawData = base64_decode($matches[2]);
-                $extension = mimeToExtension($mimeType);
+            $name = trim((string) ($file['name'] ?? ''));
+            $data = $file['data'] ?? null;
+            if (! is_string($data) || trim($data) === '') {
+                continue;
+            }
+            $data = trim($data);
 
-                if (! pathinfo($name, PATHINFO_EXTENSION)) {
-                    $name .= '.' . $extension;
+            // Content Manager / previously uploaded assets may be inserted into
+            // Chat Pro as an existing local /uploads/media/... path instead of a
+            // base64 data URI. Reuse only files owned by the authenticated user.
+            if (! str_starts_with($data, 'data:')) {
+                $pathOnly = (string) (parse_url($data, PHP_URL_PATH) ?: $data);
+                $pathOnly = '/' . ltrim($pathOnly, '/');
+                $userMarker = '/u-' . auth()->id() . '/';
+
+                if (str_starts_with($pathOnly, '/uploads/media/') && str_contains($pathOnly, $userMarker)) {
+                    $candidate = public_path(ltrim($pathOnly, '/'));
+                    $mediaRoot = realpath(public_path('uploads/media'));
+                    $realCandidate = realpath($candidate);
+
+                    if ($mediaRoot && $realCandidate && str_starts_with($realCandidate, $mediaRoot . DIRECTORY_SEPARATOR) && is_file($realCandidate)) {
+                        $extension = strtolower((string) pathinfo($realCandidate, PATHINFO_EXTENSION));
+                        if (in_array($extension, $allowedChatUploadExtensions, true) && validateUploadedFile($realCandidate, $extension)) {
+                            $resolvedName = $name !== '' ? $name : basename($realCandidate);
+                            $names[] = $resolvedName;
+                            if (in_array($extension, $imageExtensions, true)) {
+                                $images[] = $pathOnly;
+                            } else {
+                                $others[] = $pathOnly;
+                            }
+                            continue;
+                        }
+                    }
                 }
-            } else {
+
+                Log::warning('Chat Pro rejected an existing file reference', [
+                    'user_id' => auth()->id(),
+                    'path' => mb_substr($pathOnly, 0, 500),
+                ]);
                 continue;
             }
 
-            // Decide type
-            $fileType = str_starts_with($mimeType, 'image/') ? 'images' : 'other';
+            if (! preg_match('/^data:([^;]*);base64,(.+)$/s', $data, $matches)) {
+                continue;
+            }
 
-            // Directory per user
+            $mimeType = strtolower(trim((string) ($matches[1] ?? '')));
+            $rawData = base64_decode($matches[2], true);
+            if ($rawData === false) {
+                continue;
+            }
+
+            $extension = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
+            if ($extension === '' && $mimeType !== '') {
+                $extension = strtolower((string) mimeToExtension($mimeType));
+            }
+            if ($extension === '' || ! in_array($extension, $allowedChatUploadExtensions, true)) {
+                continue;
+            }
+
+            // Base64 inflates request size. Keep the decoded asset bounded.
+            if (strlen($rawData) > 100 * 1024 * 1024) {
+                continue;
+            }
+
+            if ($name === '') {
+                $name = 'upload-' . Str::random(8) . '.' . $extension;
+            } elseif (! pathinfo($name, PATHINFO_EXTENSION)) {
+                $name .= '.' . $extension;
+            }
+
+            $fileType = str_starts_with($mimeType, 'image/') || in_array($extension, $imageExtensions, true)
+                ? 'images'
+                : 'other';
+
             $relativePath = "uploads/media/{$fileType}/u-" . auth()->id();
             $absoluteDir = public_path($relativePath);
 
@@ -212,48 +278,39 @@ class CommonController extends Controller
                 throw new RuntimeException(sprintf('Directory "%s" was not created', $absoluteDir));
             }
 
-            // Avoid duplicates only for "other" when content manager active
             if ($fileType === 'other' && $contentManagerActive) {
-                $existingPath = $absoluteDir . '/' . $name;
-                if (file_exists($existingPath)) {
-                    if (! validateUploadedFile($existingPath, $extension)) {
-                        continue;
-                    }
-
-                    $publicPath = '/' . $relativePath . '/' . $name;
+                $existingPath = $absoluteDir . '/' . basename($name);
+                if (file_exists($existingPath) && validateUploadedFile($existingPath, $extension)) {
+                    $publicPath = '/' . $relativePath . '/' . basename($name);
                     $uploadedFile = new File($existingPath);
                     $this->checkOtherStorage($uploadedFile, $publicPath);
-
                     $others[] = $publicPath;
-
+                    $names[] = basename($name);
                     continue;
                 }
             }
 
-            // File naming
+            $safeOriginalName = basename(str_replace(['\\', '/'], '-', $name));
             $uniqueName = ($fileType === 'other' && $contentManagerActive)
-                ? $name
-                : Str::random(10) . '-' . time() . '-' . $name;
-
+                ? $safeOriginalName
+                : Str::random(10) . '-' . time() . '-' . $safeOriginalName;
             $absolutePath = $absoluteDir . '/' . $uniqueName;
 
             try {
                 if (file_put_contents($absolutePath, $rawData) === false) {
                     Log::error("Failed to save file: {$absolutePath}");
+                    continue;
+                }
 
+                if (! validateUploadedFile($absolutePath, $extension)) {
+                    @unlink($absolutePath);
                     continue;
                 }
 
                 $publicPath = '/' . $relativePath . '/' . $uniqueName;
-
-                if (! validateUploadedFile($absolutePath, $extension)) {
-                    @unlink($absolutePath);
-
-                    continue;
-                }
-
                 $uploadedFile = new File($absolutePath);
                 $this->checkOtherStorage($uploadedFile, $publicPath);
+                $names[] = $safeOriginalName;
 
                 if ($fileType === 'images') {
                     $images[] = $publicPath;
@@ -261,21 +318,28 @@ class CommonController extends Controller
                     $others[] = $publicPath;
                 }
             } catch (Throwable $e) {
-                Log::error("Upload failed for {$uniqueName}: " . $e->getMessage());
+                Log::error("Upload failed for {$uniqueName}: " . $e->getMessage(), [
+                    'user_id' => auth()->id(),
+                ]);
             }
         }
 
-        // Priority: other > image
-        if (! empty($others)) {
+        $allPaths = array_values(array_merge($others, $images));
+        if ($allPaths === []) {
             return response()->json([
-                'type' => 'other',
-                'path' => $others,
-            ]);
+                'error' => true,
+                'message' => __('The selected file is not supported or could not be uploaded.'),
+            ], 422);
         }
 
         return response()->json([
-            'type' => 'image',
-            'path' => $images,
+            'type'   => $others !== [] ? 'other' : 'image',
+            'path'   => $allPaths,
+            'paths'  => $allPaths,
+            'name'   => implode(',', $names),
+            'names'  => $names,
+            'others' => array_values($others),
+            'images' => array_values($images),
         ]);
     }
 

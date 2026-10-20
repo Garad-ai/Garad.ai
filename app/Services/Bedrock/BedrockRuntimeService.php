@@ -22,12 +22,12 @@ class BedrockRuntimeService
 
     public function invokeClaude($prompt)
     {
-        return $this->invokeModel(setting('anthropic_bedrock_model', BedrockEngine::CLAUDE_21->value), $prompt);
+        return $this->invokeModel(setting('anthropic_bedrock_model', BedrockEngine::CLAUDE_SONNET_5_5->value), $prompt);
     }
 
     protected function invokeModel($modelId, $prompt)
     {
-        if ($modelId == BedrockEngine::CLAUDE_3_SONNET->value || $modelId == BedrockEngine::CLAUDE_3_HAIKU->value) {
+        if ($modelId == BedrockEngine::CLAUDE_SONNET_5_5->value || $modelId == BedrockEngine::CLAUDE_HAIKU_4_5->value) {
             $result = $this->client->invokeModel([
                 'modelId'     => $modelId,
                 'contentType' => 'application/json',

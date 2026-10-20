@@ -940,6 +940,7 @@ class ModelConfigurationService
                     ],
                 ],
             ],
+            'seedance-2.5' => self::seedance25Config(),
             'gemini-omni-flash' => [
                 'label'       => __('Gemini Omni Flash'),
                 'description' => __('Video with synchronized audio'),
@@ -1082,6 +1083,68 @@ class ModelConfigurationService
         ];
     }
 
+    private static function seedance25Config(): array
+    {
+        $durations = [['value' => 'auto', 'label' => __('Auto')]];
+        foreach (range(4, 30) as $s) {
+            $durations[] = ['value' => (string) $s, 'label' => $s . 's'];
+        }
+
+        $common = fn () => [
+            self::selectInput('seedance_duration', __('Duration'), $durations, '5', __('Video duration (auto or 4-30 seconds)')),
+            self::aspectRatioSelect([
+                ['value' => 'auto', 'label' => __('Auto')],
+                ['value' => '21:9', 'label' => '21:9 (Ultra-wide)'],
+                ['value' => '16:9', 'label' => '16:9 (Landscape)'],
+                ['value' => '4:3', 'label' => '4:3'],
+                ['value' => '1:1', 'label' => '1:1 (Square)'],
+                ['value' => '3:4', 'label' => '3:4'],
+                ['value' => '9:16', 'label' => '9:16 (Portrait)'],
+            ], '16:9'),
+            self::selectInput('seedance_resolution', __('Resolution'), [
+                ['value' => '720p', 'label' => '720p'],
+                ['value' => '480p', 'label' => '480p'],
+            ], '720p', __('Video resolution quality')),
+            self::checkboxInput('generate_audio', __('Generate Audio'), true, __('Enable synchronized audio generation including sound effects and lip-synced speech')),
+            self::seedInput(),
+        ];
+
+        return [
+            'label'       => __('Seedance 2.5'),
+            'description' => __('ByteDance video up to 30 seconds with native audio'),
+            'isActive'    => true,
+            'subModels'   => [
+                'seedance-2.5' => [
+                    'isActive' => true,
+                    'features' => [
+                        EntityEnum::SEEDANCE_2_5_TTV->value => [
+                            'label'  => EntityEnum::SEEDANCE_2_5_TTV->label(),
+                            'inputs' => array_merge([
+                                self::promptInput('Video Description', 'Describe the video you want to generate...', 5),
+                            ], $common()),
+                        ],
+                        EntityEnum::SEEDANCE_2_5_ITV->value => [
+                            'label'  => EntityEnum::SEEDANCE_2_5_ITV->label(),
+                            'inputs' => array_merge([
+                                self::imageUpload(null, 'image_url', __('Upload Start Image')),
+                                self::imageUpload(null, 'end_image_url', __('End Frame Image (optional)'), false),
+                                self::promptInput('Motion Description', 'Describe the desired motion and action...', 4),
+                            ], $common()),
+                        ],
+                        EntityEnum::SEEDANCE_2_5_RTV->value => [
+                            'label'  => EntityEnum::SEEDANCE_2_5_RTV->label(),
+                            'inputs' => array_merge([
+                                self::multipleImageUpload('image_urls[]', __('Reference Images (up to 9)'), false, 0, 9),
+                                self::multipleVideoUpload('video_urls[]', __('Reference Videos (up to 3, optional)')),
+                                self::multipleAudioUpload('audio_urls[]', __('Reference Audio (up to 3, optional)')),
+                                self::promptInput('Video Description', 'Describe what to generate, use @Image1, @Image2 to reference uploaded images...', 5),
+                            ], $common()),
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
     private static function selectInput(
         string $name,
         string $label,

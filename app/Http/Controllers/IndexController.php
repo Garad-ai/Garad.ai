@@ -28,6 +28,12 @@ class IndexController extends Controller
 
     public function __invoke()
     {
+        if (Auth::check()) {
+            return Auth::user()->isAdmin()
+                ? redirect()->route('dashboard.admin.index')
+                : redirect()->route('chat.pro');
+        }
+
         $maintenance = Cache::get('maintenance');
 
         $maintenanceMode = data_get($maintenance, 'maintenance_mode', false);

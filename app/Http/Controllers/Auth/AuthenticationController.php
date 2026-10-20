@@ -31,6 +31,26 @@ use Spatie\Newsletter\Facades\Newsletter;
 
 class AuthenticationController extends Controller
 {
+    public function requirements(): \Illuminate\Http\JsonResponse
+    {
+        $fields = ['name', 'surname', 'phone', 'country'];
+        $required = array_values(array_filter(
+            $fields,
+            static fn (string $field): bool => (bool) setting("registration_fields_{$field}", 0),
+        ));
+
+        return response()->json([
+            'registrationRequiredFields' => $required,
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    private function postAuthenticationRedirect(): RedirectResponse
+    {
+        return Auth::user()?->isAdmin()
+            ? redirect()->route('dashboard.admin.index')
+            : redirect()->route('chat.pro');
+    }
+
     public function githubCallback(Request $request): RedirectResponse
     {
         $githubUser = Socialite::driver('github')->user();
@@ -65,7 +85,7 @@ class AuthenticationController extends Controller
         $connection = $request->header('User-Agent');
         event(new UsersActivityEvent($user->email, $user->type, $ip, $connection));
 
-        return redirect()->route('chat.pro');
+        return $this->postAuthenticationRedirect();
     }
 
     /**
@@ -80,7 +100,7 @@ class AuthenticationController extends Controller
         $connection = $request->header('User-Agent');
         event(new UsersActivityEvent($user?->email, $user?->type, $ip, $connection));
 
-        return redirect()->route('chat.pro');
+        return $this->postAuthenticationRedirect();
     }
 
     public function googleCallback(Request $request): RedirectResponse
@@ -120,7 +140,7 @@ class AuthenticationController extends Controller
         $connection = $request->header('User-Agent');
         event(new UsersActivityEvent($user->email, $user->type, $ip, $connection));
 
-        return redirect()->route('chat.pro');
+        return $this->postAuthenticationRedirect();
     }
 
     public function facebookCallback(Request $request): RedirectResponse
@@ -160,7 +180,7 @@ class AuthenticationController extends Controller
             event(new UsersActivityEvent($user->email, $user->type, $ip, $connection));
         }
 
-        return redirect()->route('chat.pro');
+        return $this->postAuthenticationRedirect();
 
     }
 
@@ -299,6 +319,7 @@ class AuthenticationController extends Controller
         // If login without email confirmation is allowed
         if ($settings->login_without_confirmation === 1) {
             Auth::login($user, true);
+            $request->session()->regenerate();
 
             // Log user activity (for analytics or auditing)
             event(new UsersActivityEvent($user->email, $user->type, $request->ip(), $request->header('User-Agent')));

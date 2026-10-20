@@ -6,6 +6,7 @@ namespace App\Domains\Entity\Concerns;
 
 use App\Domains\Entity\Enums\EntityEnum;
 use App\Domains\Entity\Facades\Entity;
+use App\Domains\Entity\Models\Entity as EntityModel;
 use App\Enums\MagicResponse;
 use App\Helpers\Classes\Helper;
 use App\Helpers\Classes\MarketplaceHelper;
@@ -28,6 +29,15 @@ trait HasCreditLimit
     protected ?float $calculatedInputCredit = null;
 
     private static ?array $aiImageProSelectedModelsCache = null;
+
+    private function isSuperAdminCreditExempt(): bool
+    {
+        if (array_key_exists('user', get_object_vars($this))) {
+            return $this->user?->isSuperAdmin() ?? false;
+        }
+
+        return auth()->user()?->isSuperAdmin() ?? false;
+    }
 
     public function isSharedCreditUser(): bool
     {
@@ -69,6 +79,13 @@ trait HasCreditLimit
 
     public function getCredit(): array
     {
+        if ($this->isSuperAdminCreditExempt()) {
+            return [
+                'credit' => 0.0,
+                'isUnlimited' => true,
+            ];
+        }
+
         if ($this->isSharedCreditUser()) {
             $user = $this->getUserWithCredit();
             $balance = (float) $user->shared_credits;
@@ -194,20 +211,23 @@ trait HasCreditLimit
 
     public function getCreditBalance(): float
     {
+        if ($this->isSuperAdminCreditExempt()) {
+            return 0.0;
+        }
+
         $credit = $this->getCredit()['credit'];
 
         if (is_string($credit)) {
             $credit = (float) $credit;
         }
 
-        $aiFinances = app('ai_chat_model_plan');
-
         $engineDefaultModels = $this->engine()->getDefaultModels(Setting::getCache(), SettingTwo::getCache());
         $model = $this->model(config('octane.enabled'));
+        $isIncludedInCurrentPlan = $this->isIncludedInCurrentPlan($model);
         if (
-            $model && ! $model->is_selected &&
+            $model &&
             ! in_array($model->key, $engineDefaultModels, true) &&
-            ! in_array($model->id, $aiFinances, true) &&
+            ! $isIncludedInCurrentPlan &&
             ! $this->isInAiImageProSelectedModels($model->key->value) &&
             ! $this->isWebSearchModel()
         ) {
@@ -231,23 +251,34 @@ trait HasCreditLimit
      */
     public function getIsUnlimitedCredit(): bool
     {
-        if ($this->isSharedCreditUser()) {
-            return false;
+        if ($this->isSuperAdminCreditExempt()) {
+            return true;
         }
-
-        $aiFinances = app('ai_chat_model_plan');
 
         $engineDefaultModels = $this->engine()->getDefaultModels(Setting::getCache(), SettingTwo::getCache());
 
         $model = $this->model(config('octane.enabled'));
+        $isIncludedInCurrentPlan = $this->isIncludedInCurrentPlan($model);
 
         if (
-            $model && ! $model->is_selected &&
+            $model &&
             ! in_array($model->key, $engineDefaultModels, true) &&
-            ! in_array($model->id, $aiFinances, true) &&
+            ! $isIncludedInCurrentPlan &&
             ! $this->isInAiImageProSelectedModels($model->key->value) &&
             ! $this->isWebSearchModel()
         ) {
+            return false;
+        }
+
+        if (
+            $model &&
+            $this->enum()->isChatModel() &&
+            ($isIncludedInCurrentPlan || in_array($model->key, $engineDefaultModels, true))
+        ) {
+            return true;
+        }
+
+        if ($this->isSharedCreditUser()) {
             return false;
         }
 
@@ -261,6 +292,18 @@ trait HasCreditLimit
         }
 
         return $isUnlimited;
+    }
+
+    private function isIncludedInCurrentPlan(?EntityModel $model): bool
+    {
+        if (! $model) {
+            return false;
+        }
+
+        return collect(EntityModel::planModels())->contains(
+            static fn ($availableModel) => $availableModel instanceof EntityModel
+                && $availableModel->is($model)
+        );
     }
 
     /**
@@ -314,6 +357,10 @@ trait HasCreditLimit
      */
     public function hasCreditBalance(): bool
     {
+        if ($this->isSuperAdminCreditExempt()) {
+            return true;
+        }
+
         if ($this->guest) {
             return $this->guestHasAttempts();
         }
@@ -419,14 +466,15 @@ trait HasCreditLimit
      */
     public function decreaseCredit(float $value = 1.00): bool
     {
-        if ($this->guest || $this->isUnlimitedCredit()) {
+        if ($this->guest || $this->isSuperAdminCreditExempt() || $this->isUnlimitedCredit()) {
             return true;
         }
 
         $entity = EntityEnum::fromSlug($this->enum()->slug());
         $unitPrice = $entity->unitPrice();
         $currentSpend = $value * $unitPrice;
-        setting(['total_spend' => number_format((setting('total_spend', 0) + $currentSpend), 2)])->save();
+        $previousSpend = (float) str_replace(',', '', (string) setting('total_spend', 0));
+        setting(['total_spend' => number_format($previousSpend + $currentSpend, 2, '.', '')])->save();
 
         UserUsageCredit::create([
             'user_id'     => $this->getUser()->id,
@@ -560,7 +608,7 @@ trait HasCreditLimit
      */
     public function hasCreditBalanceForInput(): bool
     {
-        if ($this->isUnlimitedCredit()) {
+        if ($this->isSuperAdminCreditExempt() || $this->isUnlimitedCredit()) {
             return true;
         }
 

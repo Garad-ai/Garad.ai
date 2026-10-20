@@ -6,6 +6,7 @@ use App\Domains\Marketplace\Http\Middleware\NewExtensionInstalled;
 use App\Http\Middleware\AdminPermissionMiddleware;
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\CheckInstallation;
+use App\Http\Middleware\ChatOnlyUserMiddleware;
 use App\Http\Middleware\Custom;
 use App\Http\Middleware\Custom\LocaleMiddleware;
 use App\Http\Middleware\Custom\ThemeMiddleware;
@@ -13,6 +14,7 @@ use App\Http\Middleware\DemoCheckMiddleware;
 use App\Http\Middleware\EncryptCookies;
 use App\Http\Middleware\PreventRequestsDuringMaintenance;
 use App\Http\Middleware\RedirectIfAuthenticated;
+use App\Http\Middleware\RequireAdminRoleMiddleware;
 use App\Http\Middleware\RefererMiddleware;
 use App\Http\Middleware\SentryContextMiddleware;
 use App\Http\Middleware\SurveyMiddleware;
@@ -81,6 +83,7 @@ class Kernel extends HttpKernel
             SubstituteBindings::class,
             LocaleMiddleware::class,
             ThemeMiddleware::class,
+            ChatOnlyUserMiddleware::class,
         ],
 
         'api' => [
@@ -109,6 +112,7 @@ class Kernel extends HttpKernel
         'throttle'              => ThrottleRequests::class,
         'verified'              => EnsureEmailIsVerified::class,
         'admin'                 => AdminPermissionMiddleware::class,
+        'admin.role'            => RequireAdminRoleMiddleware::class,
         'is_not_demo'           => DemoCheckMiddleware::class,
         'newExtensionInstalled' => NewExtensionInstalled::class,
     ];

@@ -52,6 +52,7 @@ use App\Extensions\AIVoiceIsolator\System\AIVoiceIsolatorServiceProvider;
 use App\Extensions\AIWebChat\System\AIWebChatServiceProvider;
 use App\Extensions\AIWriterTemplates\System\AIWriterTemplateServiceProvider;
 use App\Extensions\Announcement\System\AnnouncementServiceProvider;
+use App\Extensions\AutoEditVideos\System\AutoEditVideosServiceProvider;
 use App\Extensions\AzureOpenai\System\AzureOpenaiServiceProvider;
 use App\Extensions\AzureTTS\System\AzureTTSServiceProvider;
 use App\Extensions\BlogPilot\System\BlogPilotServiceProvider;
@@ -118,6 +119,7 @@ use App\Extensions\SpeechifyTTS\System\SpeechifyServiceProvider;
 use App\Extensions\UGCCreator\System\UGCCreatorServiceProvider;
 use App\Extensions\UGCFactory\System\UGCFactoryServiceProvider;
 use App\Extensions\UrlToVideo\System\UrlToVideoServiceProvider;
+use App\Extensions\VideoAgent\System\VideoAgentServiceProvider;
 use App\Extensions\VideoDubbing\System\VideoDubbingServiceProvider;
 use App\Extensions\VideoEditor\System\VideoEditorServiceProvider;
 use App\Extensions\Wordpress\System\WordpressServiceProvider;
@@ -238,8 +240,10 @@ class MarketplaceServiceProvider extends ServiceProvider
         'video-editor'					             => VideoEditorServiceProvider::class,
         'ugc-factory'                   => UGCFactoryServiceProvider::class,
         'ugc-creator'                   => UGCCreatorServiceProvider::class,
+        'video-agent'                   => VideoAgentServiceProvider::class,
         'video-dubbing'                 => VideoDubbingServiceProvider::class,
         'ai-captions'                   => AiCaptionsServiceProvider::class,
+        'auto-edit-videos'              => AutoEditVideosServiceProvider::class,
         'ai-agent'                      => AIAgentServiceProvider::class,
         'ai-agent-whatsapp-channel'     => AIAgentWhatsappChannelServiceProvider::class,
         'ai-agent-slack-channel'        => AIAgentSlackChannelServiceProvider::class,

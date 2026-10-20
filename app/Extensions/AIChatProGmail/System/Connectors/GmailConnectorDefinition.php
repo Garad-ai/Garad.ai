@@ -173,26 +173,19 @@ class GmailConnectorDefinition implements ConnectorDefinition
     {
         $options = [];
 
-        try {
-            $gmail = $this->clientFactory->make($connector);
-            $labelsResult = $gmail->users_labels->listUsersLabels('me');
+        $gmail = $this->clientFactory->make($connector);
+        $labelsResult = $gmail->users_labels->listUsersLabels('me');
 
-            foreach ($labelsResult->getLabels() ?? [] as $label) {
-                $type = (string) $label->getType();
-                $id = (string) $label->getId();
-                $name = (string) $label->getName();
+        foreach ($labelsResult->getLabels() ?? [] as $label) {
+            $type = (string) $label->getType();
+            $id = (string) $label->getId();
+            $name = (string) $label->getName();
 
-                $options[] = [
-                    'id'   => $id,
-                    'name' => $name,
-                    'meta' => $type === 'system' ? __('System') : __('Custom'),
-                ];
-            }
-        } catch (Throwable $exception) {
-            Log::warning('[connectors] Gmail accessOptions failed', [
-                'connector_id' => $connector->id,
-                'message'      => $exception->getMessage(),
-            ]);
+            $options[] = [
+                'id'   => $id,
+                'name' => $name,
+                'meta' => $type === 'system' ? __('System') : __('Custom'),
+            ];
         }
 
         return [

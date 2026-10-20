@@ -13,6 +13,7 @@ use App\Packages\FalAI\Models\Kling25Turbo;
 use App\Packages\FalAI\Models\Kling26Pro;
 use App\Packages\FalAI\Models\KlingV3;
 use App\Packages\FalAI\Models\Seedance2;
+use App\Packages\FalAI\Models\Seedance25;
 use App\Packages\FalAI\Models\Veed;
 use App\Packages\FalAI\Models\Veo3;
 use App\Packages\FalAI\Models\Veo31;
@@ -71,6 +72,9 @@ class FalAIService
             EntityEnum::SEEDANCE_2_FAST_TTV,
             EntityEnum::SEEDANCE_2_FAST_ITV,
             EntityEnum::SEEDANCE_2_FAST_RTV        => new Seedance2($this->client, $model),
+            EntityEnum::SEEDANCE_2_5_TTV,
+            EntityEnum::SEEDANCE_2_5_ITV,
+            EntityEnum::SEEDANCE_2_5_RTV           => new Seedance25($this->client, $model),
             EntityEnum::GEMINI_OMNI_FLASH_TTV,
             EntityEnum::GEMINI_OMNI_FLASH_ITV,
             EntityEnum::GEMINI_OMNI_FLASH_RTV      => new GeminiOmniFlash($this->client, $model),

@@ -19,6 +19,10 @@ class AIAgentPlanService
      */
     public function checkWorkflowLimit(User $user): void
     {
+        if ($user->isAdmin()) {
+            return;
+        }
+
         $limit = $this->workflowLimit($user);
 
         if ($limit < 0) {
@@ -37,6 +41,10 @@ class AIAgentPlanService
      */
     public function checkChannelLimit(User $user): void
     {
+        if ($user->isAdmin()) {
+            return;
+        }
+
         $limit = $this->channelLimit($user);
 
         if ($limit < 0) {
@@ -55,6 +63,10 @@ class AIAgentPlanService
      */
     public function checkMemoryLimit(User $user): void
     {
+        if ($user->isAdmin()) {
+            return;
+        }
+
         $limit = $this->memoryLimit($user);
 
         if ($limit < 0) {

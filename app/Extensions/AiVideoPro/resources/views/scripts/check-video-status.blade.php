@@ -1,8 +1,11 @@
 <script>
     window._inProgressIds = @json($inProgress);
     window._checkStatusBaseUrl = '{{ route('dashboard.user.ai-video-pro.check') }}';
+    window._videoStatusBusy = false;
 
     function checkVideoStatus() {
+        if (window._videoStatusBusy) return;
+
         if (!window._inProgressIds || window._inProgressIds.length === 0) {
             if (window._videoStatusInterval) {
                 clearInterval(window._videoStatusInterval);
@@ -11,67 +14,71 @@
             return;
         }
 
+        window._videoStatusBusy = true;
         const params = new URLSearchParams();
         window._inProgressIds.forEach(id => params.append('ids[]', id));
 
-        fetch(window._checkStatusBaseUrl + '?' + params.toString())
-            .then(response => response.json())
+        fetch(window._checkStatusBaseUrl + '?' + params.toString(), {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+        })
+            .then(response => {
+                if (!response.ok) throw new Error('Status request failed');
+                return response.json();
+            })
             .then(data => {
                 if (!data.data || data.data.length === 0) return;
 
                 const videoPro = document.querySelector('.lqd-ai-video-pro');
                 const vmData = (videoPro && typeof Alpine !== 'undefined') ? Alpine.$data(videoPro) : null;
-                const completedIds = [];
+                const terminalIds = [];
 
                 for (const item of Object.values(data.data)) {
-                    if (item.videoData) {
-                        completedIds.push(item.videoData.id);
-                    }
+                    const itemId = Number(item.videoData?.id || String(item.divId || '').replace('video-', ''));
+                    const itemStatus = String(item.videoData?.status || '').toLowerCase();
+                    const terminal = ['complete', 'completed', 'error', 'failed', 'cancelled', 'canceled'].includes(itemStatus);
 
-                    const isPending = vmData?.pendingVideos?.includes(item.videoData?.id);
-                    const videoElement = document.getElementById(item.divId);
+                    if (terminal && itemId) terminalIds.push(itemId);
 
-                    if (isPending) {
-                        // AJAX-submitted video completed:
-                        // 1. Remove from pendingVideos (Alpine removes shimmer)
-                        vmData.pendingVideos = vmData.pendingVideos.filter(id => id !== item.videoData.id);
+                    const isPending = Boolean(itemId && vmData?.pendingVideos?.includes(itemId));
+                    const videoElement = itemId ? document.getElementById(`video-${itemId}`) : null;
 
-                        // 2. Insert server-rendered HTML as a standalone element in the grid
+                    if (isPending && terminal) {
+                        // Clear the shimmer for both successful and failed jobs.
+                        vmData.pendingVideos = vmData.pendingVideos.filter(id => id !== itemId);
+
                         const todayGrid = document.getElementById('today-videos-grid');
                         if (todayGrid && item.html) {
                             const temp = document.createElement('div');
                             temp.innerHTML = item.html.trim();
                             const newEl = temp.firstElementChild;
-                            // Insert after the x-for template items (first non-template child)
-                            const firstServerItem = todayGrid.querySelector(':scope > .group\\/item');
-                            if (firstServerItem) {
-                                todayGrid.insertBefore(newEl, firstServerItem);
-                            } else {
-                                todayGrid.appendChild(newEl);
-                            }
-                            if (typeof Alpine !== 'undefined') {
-                                Alpine.initTree(newEl);
+                            if (newEl) {
+                                const firstServerItem = todayGrid.querySelector(':scope > .group\\/item');
+                                if (firstServerItem) todayGrid.insertBefore(newEl, firstServerItem);
+                                else todayGrid.appendChild(newEl);
+                                if (typeof Alpine !== 'undefined') Alpine.initTree(newEl);
                             }
                         }
-                    } else if (videoElement) {
-                        // Server-rendered in-progress video: replace innerHTML as before
-                        videoElement.innerHTML = item.html;
-                        if (typeof Alpine !== 'undefined') {
-                            Alpine.initTree(videoElement);
-                        }
+                    } else if (videoElement && item.html) {
+                        videoElement.outerHTML = item.html;
+                        const updated = itemId ? document.getElementById(`video-${itemId}`) : null;
+                        if (updated && typeof Alpine !== 'undefined') Alpine.initTree(updated);
                     }
 
-                    // Push completed video data into the modal's videos array
-                    if (item.videoData && vmData) {
-                        if (vmData.videos && !vmData.videos.find(v => v.id === item.videoData.id)) {
-                            vmData.videos.unshift(item.videoData);
-                        }
+                    if (
+                        itemId &&
+                        itemStatus === 'complete' &&
+                        item.videoData?.video_url &&
+                        vmData?.videos &&
+                        !vmData.videos.find(v => v.id === itemId)
+                    ) {
+                        vmData.videos.unshift(item.videoData);
                     }
                 }
 
-                // Remove completed IDs from polling tracking
-                if (completedIds.length > 0) {
-                    window._inProgressIds = window._inProgressIds.filter(id => !completedIds.includes(id));
+                if (terminalIds.length > 0) {
+                    window._inProgressIds = window._inProgressIds.filter(id => !terminalIds.includes(Number(id)));
                 }
 
                 if (window._inProgressIds.length === 0 && window._videoStatusInterval) {
@@ -81,26 +88,29 @@
 
                 document.dispatchEvent(new CustomEvent('video-status-updated'));
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => console.warn('Video status check failed; retrying.', error))
+            .finally(() => { window._videoStatusBusy = false; });
     }
 
     window.startVideoPolling = function(videoId) {
-        if (!window._inProgressIds) {
-            window._inProgressIds = [];
-        }
+        if (!window._inProgressIds) window._inProgressIds = [];
 
-        if (!window._inProgressIds.includes(videoId)) {
+        videoId = Number(videoId);
+        if (videoId && !window._inProgressIds.includes(videoId)) {
             window._inProgressIds.push(videoId);
         }
 
+        checkVideoStatus();
+
         if (!window._videoStatusInterval) {
-            window._videoStatusInterval = setInterval(checkVideoStatus, 5000);
+            window._videoStatusInterval = setInterval(checkVideoStatus, 4000);
         }
     };
 
     document.addEventListener('DOMContentLoaded', function() {
         if (window._inProgressIds && window._inProgressIds.length > 0) {
-            window._videoStatusInterval = setInterval(checkVideoStatus, 5000);
+            checkVideoStatus();
+            window._videoStatusInterval = setInterval(checkVideoStatus, 4000);
         }
     });
 </script>

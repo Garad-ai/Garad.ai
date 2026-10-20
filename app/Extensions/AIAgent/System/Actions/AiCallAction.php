@@ -42,6 +42,11 @@ class AiCallAction implements AIAgentActionInterface
     {
         $systemPrompt = $config['system_prompt'] ?? 'You are a helpful AI assistant.';
         $userMessage = $this->interpolate($config['user_message'] ?? '', $context);
+        $attachmentContext = trim((string) ($context['attachment_context'] ?? ''));
+        if ($attachmentContext !== '') {
+            $systemPrompt .= "\n\n" . $attachmentContext;
+            unset($context['attachment_context']);
+        }
         $injectMemory = (bool) ($config['inject_memory'] ?? $context['inject_memory'] ?? false);
         $historyTurns = (int) ($config['history_turns'] ?? 10);
         $storeOutputAs = $config['store_output_as'] ?? 'ai_response';
@@ -319,6 +324,7 @@ class AiCallAction implements AIAgentActionInterface
                 'response_format' => ['type' => 'string', 'enum' => ['text', 'json'], 'description' => 'Set to json to force a structured object response.'],
                 'output_keys'     => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Keys the model must return; each becomes its own {key} variable.'],
             ],
+            'required' => ['user_message'],
         ];
     }
 

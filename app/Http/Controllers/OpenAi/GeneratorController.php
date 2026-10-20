@@ -6,8 +6,12 @@ use App\Domains\Engine\Enums\EngineEnum;
 use App\Domains\Entity\Enums\EntityEnum;
 use App\Domains\Entity\Facades\Entity as EntityFacade;
 use App\Domains\Entity\Models\Entity;
+use App\Enums\AITokenType;
 use App\Extensions\AIChatPro\System\Connectors\ConnectorPlanGate;
 use App\Extensions\AIChatPro\System\Connectors\Models\AIChatProConnector;
+use App\Extensions\AIChatPro\System\Services\AiChatProService;
+use App\Extensions\AIChatPro\System\Services\GaradAgentToolService;
+use App\Extensions\AIChatPro\System\Services\GaradMultimodalService;
 use App\Extensions\AiChatProImageChat\System\Services\AIChatImageService;
 use App\Extensions\AIChatProMemory\System\Models\UserChatInstruction;
 use App\Extensions\AIChatProSkills\System\Models\Skill;
@@ -16,6 +20,7 @@ use App\Extensions\ModelCouncil\System\Services\ModelCouncilService;
 use App\Extensions\SocialMedia\System\Models\SocialMediaPostDailyMetric;
 use App\Extensions\SocialMediaAgent\System\Models\SocialMediaAgent;
 use App\Helpers\Classes\ApiHelper;
+use App\Helpers\Classes\ChatAttachmentReferences;
 use App\Helpers\Classes\Helper;
 use App\Helpers\Classes\MarketplaceHelper;
 use App\Helpers\Classes\PlanHelper;
@@ -41,6 +46,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -132,16 +138,132 @@ class GeneratorController extends Controller
         }
 
         $chat_bot = $this->determineChatBot($chatParams['chatbot_front_model']);
-        $default_ai_engine = $this->determineAiEngine($chat_bot, $chatParams['chatbot_front_model']);
+        if (
+            ($chatParams['chat_type'] ?? null) === 'chatPro' &&
+            $user &&
+            ! $this->chatProModelAllowed($chat_bot)
+        ) {
+            return $this->streamRequestError(
+                'The selected chat model is not included in your current plan. Upgrade your plan to use it.',
+                'chat_model_plan_required',
+            );
+        }
 
-        if (! empty($chatParams['realtime']) && setting('default_realtime') === 'openai') {
+        $default_ai_engine = $this->determineAiEngine($chat_bot, $chatParams['chatbot_front_model']);
+        if (! empty($chatParams['agent_mode'])) {
+            if (
+                ! in_array($default_ai_engine, [
+                    EngineEnum::OPEN_AI->value,
+                    EngineEnum::GEMINI->value,
+                    EngineEnum::ANTHROPIC->value,
+                ], true)
+                || $chat_bot === EntityEnum::AZURE_OPENAI->slug()
+                || str_contains(strtolower((string) $chat_bot), 'search-preview')
+                || str_starts_with(strtolower((string) $chat_bot), 'claude-2')
+            ) {
+                return $this->streamRequestError(
+                    'Agent mode requires a configured OpenAI Responses, Gemini function-calling, or Anthropic tool-calling model. The selected model does not support the existing Agent tool path.',
+                    'agent_mode_provider_unsupported',
+                );
+            }
+
+            if (! MarketplaceHelper::isRegistered('ai-agent')) {
+                return $this->streamRequestError(
+                    'AI Agent is not available on this installation.',
+                    'agent_mode_unavailable',
+                );
+            }
+
+            $agentTools = AiChatProService::tools();
+            if (! AiChatProService::toolIsAvailable('run_agent', $agentTools)) {
+                return $this->streamRequestError(
+                    'The existing Agent execution tool is unavailable.',
+                    'agent_tool_unavailable',
+                );
+            }
+
+            $agentCatalog = app(GaradAgentToolService::class)->selectionCatalog();
+            if ($agentCatalog === []) {
+                return $this->streamRequestError(
+                    'No active, runnable saved agents are available. Activate or configure an agent with at least one valid action before starting an Agent-mode task.',
+                    'agent_mode_no_agents',
+                );
+            }
+            $chatParams['agent_catalog'] = $agentCatalog;
+        }
+
+        if (empty($chatParams['agent_mode'])
+            && ! empty($chatParams['realtime'])
+            && setting('default_realtime') === 'openai') {
             $chat_bot = setting('openai_realtime_model', EntityEnum::GPT_4_O_SEARCH_PREVIEW->value);
             $default_ai_engine = $this->determineAiEngine($chat_bot, $chat_bot);
         }
 
-        $message = $this->createChatMessage($user, $chatParams);
+        $retryMessageId = $request->integer('retry_message_id');
+        $mentionRecipients = collect();
+        if (! empty($chatParams['mention_user_ids'])) {
+            if (empty($chatParams['agent_mode'])) {
+                return $this->streamRequestError(
+                    'Structured mentions are only available in Agent mode.',
+                    'agent_mentions_not_allowed',
+                );
+            }
+            $mentionRecipients = app(\App\Extensions\AIChatPro\System\Services\AgentMessageMentionService::class)
+                ->validateRecipients(
+                    Auth::user(),
+                    $chatParams['chat'],
+                    (string) ($chatParams['raw_user_input'] ?? $chatParams['prompt'] ?? ''),
+                    $chatParams['mention_user_ids'],
+                );
+        }
+
+        $message = $retryMessageId > 0
+            ? $this->reuseChatMessage($user, $chatParams, $retryMessageId)
+            : $this->createChatMessage($user, $chatParams);
+        if (! empty($chatParams['agent_mode']) && Schema::hasTable('ext_ai_chat_pro_agent_conversations')) {
+            $chat = $chatParams['chat'];
+            $workspaceId = Schema::hasColumn($chat->getTable(), 'team_id') && $chat->team_id
+                ? (int) $chat->team_id
+                : null;
+            DB::table('ext_ai_chat_pro_agent_conversations')->insertOrIgnore([
+                'chat_id'      => $chat->id,
+                'user_id'      => $chat->user_id ?? $user->id,
+                'workspace_id' => $workspaceId,
+                'created_at'   => now(),
+                'updated_at'   => now(),
+            ]);
+        }
+        if ($mentionRecipients->isNotEmpty()) {
+            app(\App\Extensions\AIChatPro\System\Services\AgentMessageMentionService::class)
+                ->persist($user, $chatParams['chat'], $message, $mentionRecipients);
+        }
+        if (
+            ($chatParams['chat_type'] ?? null) === 'chatPro' &&
+            MarketplaceHelper::isRegistered('ai-chat-pro') &&
+            (! empty($chatParams['pdfpath']) || ! empty($chatParams['images']))
+        ) {
+            try {
+                app(GaradMultimodalService::class)->attachConversationAssets(
+                    (int) $message->user_openai_chat_id,
+                    $chatParams['pdfpath'] ?? null,
+                    $chatParams['pdfname'] ?? null,
+                    $chatParams['images'] ?? null,
+                    $chatParams['image_names'] ?? null,
+                    Auth::id(),
+                );
+            } catch (Throwable $exception) {
+                $chatParams['attachment_analysis_failed'] = true;
+                Log::warning('Chat attachment analysis could not ingest an uploaded file.', [
+                    'chat_id' => (int) $message->user_openai_chat_id,
+                    'user_id' => Auth::id(),
+                    'exception_class' => $exception::class,
+                ]);
+            }
+        }
+
         $history = $this->buildChatHistory($chatParams, $message->user_openai_chat_id, (int) $message->id);
         $isFileSearch = setting('openai_file_search', 0) && ! empty($chatParams['chat']->openai_vector_id);
+        $request->attributes->set('garad_chat_message_id', (int) $message->id);
 
         if ($this->realtimeCreditsFailed) {
             return response()->stream(function () use ($message) {
@@ -164,7 +286,7 @@ class GeneratorController extends Controller
             ]);
         }
 
-        return $this->streamService->ChatStream(
+        $streamResponse = $this->streamService->ChatStream(
             $chat_bot,
             $history,
             $message,
@@ -173,6 +295,7 @@ class GeneratorController extends Controller
             fileChat: $isFileSearch,
             tempChatActive: (bool) ($chatParams['temp_chat_button'] ?? false)
         );
+        return $streamResponse;
     }
 
     public function buildCouncilStreamedOutput(Request $request): StreamedResponse
@@ -268,23 +391,66 @@ class GeneratorController extends Controller
 
     private function extractChatParameters(Request $request): array
     {
+        $request->validate([
+            'prompt' => ['nullable', 'string'],
+            'raw_user_input' => ['sometimes', 'nullable', 'string'],
+            'retry_message_id' => ['sometimes', 'integer', 'min:1'],
+            'personalization' => ['sometimes', 'array'],
+            'personalization.language' => ['sometimes', 'nullable', 'in:English,Somali'],
+            'personalization.responseTraits' => ['sometimes', 'array', 'max:10'],
+            'personalization.responseTraits.*' => ['string', 'max:80'],
+            'personalization.customInstructions' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'mentionUserIds' => ['sometimes', 'array', 'max:12'],
+            'mentionUserIds.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+
         $chat_id = $request->get('chat_id');
-        $chat = UserOpenaiChat::with('category')->find($chat_id);
+        $user = $request->user();
+        if (! $user || ! $chat_id) {
+            return [];
+        }
+
+        $team = Helper::appIsDemo() ? null : $user->getAttribute('team');
+        $myCreatedTeam = Helper::appIsDemo() ? null : $user->getAttribute('myCreatedTeam');
+        $chat = UserOpenaiChat::query()
+            ->with('category')
+            ->whereKey($chat_id)
+            ->where(function (Builder $query) use ($user, $team, $myCreatedTeam): void {
+                $query->where('user_id', $user->id)
+                    ->when($team && $team->is_shared, fn (Builder $query) => $query->orWhere('team_id', $team->id))
+                    ->when($myCreatedTeam, fn (Builder $query) => $query->orWhere('team_id', $myCreatedTeam->id));
+            })
+            ->first();
 
         if (! $chat) {
             return [];
         }
 
+        $prompt = $request->get('prompt');
+        $legacyPreferencesInstruction = null;
+        if (
+            ! $request->has('raw_user_input')
+            && $request->get('template_type') === 'chatPro'
+            && is_string($prompt)
+        ) {
+            [$prompt, $legacyPreferencesInstruction] = $this->separateLegacyResponsePreferences($prompt);
+        }
+
         $data = [
-            'prompt'              => $request->get('prompt'),
+            'prompt'              => $prompt,
+            'raw_user_input'      => $request->input('raw_user_input', $prompt),
+            'personalization'     => $request->input('personalization', []),
             'realtime'            => $request->get('realtime', false),
             'chat_brand_voice'    => $request->get('chat_brand_voice'),
             'brand_voice_prod'    => $request->get('brand_voice_prod'),
             'chat_id'             => $chat_id,
             'chat_type'           => $request->get('template_type'),
+            'agent_mode'          => $request->boolean('agent_mode'),
+            'mention_user_ids'    => $request->input('mentionUserIds', []),
             'agent_id'            => $request->integer('chat_open_ai_agent_id') ?: null,
             'crm_scope'           => $request->get('crm_scope') ?: 'all',
             'images'              => $request->get('images', null),
+            'image_names'         => $request->get('image_names', null),
             'pdfname'             => $request->get('pdfname', null),
             'pdfpath'             => $request->get('pdfpath', null),
             'assistant'           => $request->get('assistant', null),
@@ -296,6 +462,10 @@ class GeneratorController extends Controller
             'openRouter'          => $this->determineOpenRouter($request->get('chatbot_front_model', null)),
             'contain_images'      => false, // Will be determined later
         ];
+
+        if ($legacyPreferencesInstruction !== null) {
+            $data['legacy_response_preferences_instruction'] = $legacyPreferencesInstruction;
+        }
 
         if ($request->get('template_type') === 'chatPro-image' && MarketplaceHelper::isRegistered('ai-chat-pro-image-chat')) {
             $imageParams = AIChatImageService::extractImageChatParameters($request);
@@ -329,9 +499,9 @@ class GeneratorController extends Controller
         } elseif ($default_ai_engine === EngineEnum::GEMINI->value) {
             $chat_bot = setting('gemini_default_model', EntityEnum::GEMINI_1_5_FLASH->value);
         } elseif ($default_ai_engine === EngineEnum::ANTHROPIC->value) {
-            $chat_bot = setting('anthropic_default_model', EntityEnum::CLAUDE_3_OPUS->value);
+            $chat_bot = setting('anthropic_default_model', EntityEnum::CLAUDE_OPUS_4_8->value);
         } elseif ($default_ai_engine === EngineEnum::DEEP_SEEK->value) {
-            $chat_bot = setting('deepseek_default_model', EntityEnum::DEEPSEEK_CHAT->value);
+            $chat_bot = setting('deepseek_default_model', EntityEnum::DEEPSEEK_V4_PRO->value);
         } elseif ($default_ai_engine === EngineEnum::X_AI->value) {
             $chat_bot = setting('xai_default_model', EntityEnum::GROK_2_1212->value);
         } else {
@@ -360,6 +530,27 @@ class GeneratorController extends Controller
         }
 
         return $chat_bot;
+    }
+
+    private function chatProModelAllowed(string $modelKey): bool
+    {
+        $user = Auth::user();
+
+        if ($user?->isSuperAdmin()) {
+            $model = Entity::query()
+                ->isEnabled()
+                ->where('key', $modelKey)
+                ->whereHas('tokens', fn ($query) => $query->where('type', AITokenType::WORD->value))
+                ->first();
+
+            return $model !== null
+                && (EntityEnum::tryFrom($modelKey)?->isChatModel() ?? false);
+        }
+
+        return collect(Entity::planModels())->contains(
+            static fn ($model) => $model instanceof Entity
+                && (string) $model->getRawOriginal('key') === $modelKey,
+        );
     }
 
     private function determineAiEngine(string $chat_bot, ?string $chatbot_front_model): string
@@ -397,19 +588,20 @@ class GeneratorController extends Controller
 
     private function createChatMessage($user, array $chatParams): UserOpenaiChatMessage
     {
+        $imageReferences = $this->normalizeImageReferences($chatParams['images'] ?? null);
         $attributes = [
             'user_id'             => $user?->id,
             'user_openai_chat_id' => $chatParams['chat_id'],
-            'input'               => $chatParams['prompt'],
+            'input'               => $chatParams['raw_user_input'] ?? $chatParams['prompt'],
             'response'            => null,
             'realtime'            => $chatParams['realtime'] ?? 0,
             'output'              => __("(If you encounter this message, please attempt to send your message again. If the error persists beyond multiple attempts, please don't hesitate to contact us for assistance!)"),
             'hash'                => Str::random(256),
             'credits'             => 0,
             'words'               => 0,
-            'images'              => is_array($chatParams['images']) ? implode(',', $chatParams['images']) : $chatParams['images'],
-            'pdfName'             => $chatParams['pdfname'],
-            'pdfPath'             => $chatParams['pdfpath'],
+            'images'              => $imageReferences === [] ? null : implode(',', $imageReferences),
+            'pdfName'             => ChatAttachmentReferences::normalize($chatParams['pdfname'] ?? null),
+            'pdfPath'             => ChatAttachmentReferences::normalize($chatParams['pdfpath'] ?? null),
         ];
 
         if (! empty($chatParams['highlight_context']) && Schema::hasColumn('user_openai_chat_messages', 'highlight_context')) {
@@ -423,6 +615,30 @@ class GeneratorController extends Controller
         }
 
         return UserOpenaiChatMessage::create($attributes);
+    }
+
+    private function reuseChatMessage($user, array $chatParams, int $messageId): UserOpenaiChatMessage
+    {
+        $message = UserOpenaiChatMessage::query()
+            ->whereKey($messageId)
+            ->where('user_openai_chat_id', $chatParams['chat_id'])
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        $imageReferences = $this->normalizeImageReferences($chatParams['images'] ?? null);
+        $message->forceFill([
+            'input' => $chatParams['raw_user_input'] ?? $chatParams['prompt'],
+            'response' => null,
+            'output' => __('(If you encounter this message, please attempt to send your message again. If the error persists beyond multiple attempts, please don\'t hesitate to contact us for assistance!)'),
+            'realtime' => $chatParams['realtime'] ?? 0,
+            'credits' => 0,
+            'words' => 0,
+            'images' => $imageReferences === [] ? $message->images : implode(',', $imageReferences),
+            'pdfName' => ChatAttachmentReferences::normalize($chatParams['pdfname'] ?? null) ?? $message->pdfName,
+            'pdfPath' => ChatAttachmentReferences::normalize($chatParams['pdfpath'] ?? null) ?? $message->pdfPath,
+        ])->save();
+
+        return $message;
     }
 
     private function buildChatHistory(array &$chatParams, int $chat_id, ?int $currentMessageId = null): array
@@ -440,6 +656,22 @@ class GeneratorController extends Controller
 
         $history = $this->initializeHistory($category, $systemRole);
 
+        $responsePreferences = $this->responsePreferencesInstruction(
+            $chatParams['personalization'] ?? null,
+        );
+        if ($responsePreferences !== null) {
+            $history[] = [
+                'role' => $systemRole,
+                'content' => $responsePreferences,
+            ];
+        }
+        if (! empty($chatParams['legacy_response_preferences_instruction'])) {
+            $history[] = [
+                'role' => $systemRole,
+                'content' => $chatParams['legacy_response_preferences_instruction'],
+            ];
+        }
+
         if (($chatParams['chat_type'] ?? null) === 'socialMediaAgent') {
             $history[] = [
                 'role'    => $systemRole,
@@ -453,6 +685,44 @@ class GeneratorController extends Controller
             $history = $this->appendCrmAssistantContext($history, $chatParams, $systemRole);
         }
         $history = $this->addFileOrInstructionsToHistory($history, $category, $chat_id, $chatParams['prompt'], $systemRole);
+
+        if (($chatParams['chat_type'] ?? null) === 'chatPro' && MarketplaceHelper::isRegistered('ai-chat-pro')) {
+            try {
+                $documentContext = app(GaradMultimodalService::class)->buildSystemContextMessage(
+                    $chat_id,
+                    (string) ($chatParams['prompt'] ?? ''),
+                    $category?->slug,
+                );
+
+                if ($documentContext !== null) {
+                    $history[] = ['role' => $systemRole, 'content' => $documentContext];
+                }
+            } catch (Throwable $exception) {
+                $chatParams['attachment_analysis_failed'] = true;
+                Log::warning('Chat attachment context could not be added to model history.', [
+                    'chat_id' => $chat_id,
+                    'user_id' => Auth::id(),
+                    'exception_class' => $exception::class,
+                ]);
+            }
+        }
+
+        if (! empty($chatParams['agent_mode'])) {
+            $history[] = [
+                'role' => $systemRole,
+                'content' => AiChatProService::agentModeInstruction(
+                    $chatParams['agent_catalog'] ?? [],
+                ),
+            ];
+        }
+
+        if (! empty($chatParams['attachment_analysis_failed'])) {
+            $history[] = [
+                'role' => $systemRole,
+                'content' => 'An uploaded file could not be fully analyzed. Do not claim to have inspected its contents or guess what it contains. Tell the user that file analysis failed and ask them to retry or upload a supported, readable file.',
+            ];
+        }
+
         $history = $this->checkBrandVoice($chatParams['chat_brand_voice'], $chatParams['brand_voice_prod'], $history);
         $history = $this->checkSkills($chatParams['skill_ids'] ?? null, $history, $systemRole, $chatParams);
         $history = $this->addPreviousMessagesToHistory(
@@ -464,6 +734,81 @@ class GeneratorController extends Controller
         );
 
         return $this->addCurrentPromptToHistory($history, $chatParams, $systemRole);
+    }
+
+    private function separateLegacyResponsePreferences(string $prompt): array
+    {
+        $marker = "\n\nPlease follow these response preferences:\n";
+        $markerPosition = strrpos($prompt, $marker);
+        if ($markerPosition === false) {
+            return [$prompt, null];
+        }
+
+        $generatedPreferences = substr($prompt, $markerPosition + strlen($marker));
+        $lines = explode("\n", $generatedPreferences);
+        if (
+            ! preg_match('/^- Reply in (?:English|Somali)\.$/D', $lines[0] ?? '')
+            || collect($lines)->contains(fn (string $line): bool => $line === '' || ! str_starts_with($line, '- '))
+        ) {
+            return [$prompt, null];
+        }
+
+        return [
+            substr($prompt, 0, $markerPosition),
+            "Follow these user response preferences when compatible with the request and system requirements:\n"
+                . $generatedPreferences,
+        ];
+    }
+
+    private function responsePreferencesInstruction(mixed $preferences): ?string
+    {
+        if (! is_array($preferences)) {
+            return null;
+        }
+
+        $instructions = [];
+        $language = $preferences['language'] ?? null;
+        if (in_array($language, ['English', 'Somali'], true)) {
+            $instructions[] = 'Reply in ' . $language . '.';
+        }
+
+        foreach ($preferences['responseTraits'] ?? [] as $trait) {
+            if (is_string($trait) && trim($trait) !== '') {
+                $instructions[] = trim($trait);
+            }
+        }
+
+        $customInstructions = trim((string) ($preferences['customInstructions'] ?? ''));
+        if ($customInstructions !== '') {
+            $instructions[] = $customInstructions;
+        }
+
+        if ($instructions === []) {
+            return null;
+        }
+
+        return "Follow these user response preferences when compatible with the request and system requirements:\n- "
+            . implode("\n- ", array_unique($instructions));
+    }
+
+    private function streamRequestError(string $message, string $code): StreamedResponse
+    {
+        return response()->stream(function () use ($message, $code): void {
+            echo "event: error\n";
+            echo 'data: ' . json_encode([
+                'type' => 'error',
+                'message' => $message,
+                'code' => $code,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n\n";
+            echo "event: stop\n";
+            echo "data: [DONE]\n\n";
+            flush();
+        }, 200, [
+            'Cache-Control' => 'no-cache',
+            'X-Accel-Buffering' => 'no',
+            'Connection' => 'keep-alive',
+            'Content-Type' => 'text/event-stream',
+        ]);
     }
 
     private function appendCrmAssistantContext(array $history, array $chatParams, string $systemRole): array
@@ -878,7 +1223,7 @@ class GeneratorController extends Controller
             ];
         }
 
-        $images = explode(',', $chatParams['images']);
+        $images = $this->normalizeImageReferences($chatParams['images'] ?? null);
         $history[] = [
             'role'    => 'user',
             'content' => array_merge(
@@ -893,6 +1238,11 @@ class GeneratorController extends Controller
         ];
 
         return $history;
+    }
+
+    private function normalizeImageReferences(array|string|null $images): array
+    {
+        return ChatAttachmentReferences::parse($images);
     }
 
     /**
@@ -912,54 +1262,48 @@ class GeneratorController extends Controller
         return $chatParams['prompt'];
     }
 
-    private function processMessageImages($images, $assistant): array
+    private function processMessageImages(array|string|null $images, $assistant): array
     {
-        return collect($images)->map(static function ($item) use ($assistant) {
-            $images = explode(',', $item);
-            $imageResults = [];
-            if (! empty($images)) {
-                foreach ($images as $image) {
-                    if (Str::startsWith($image, 'http')) {
-                        $imageData = file_get_contents($image);
-                    } else {
-                        $img = ltrim($image, '/');
-                        if (! file_exists($img)) {
-                            continue;
-                        }
-                        $imageData = file_get_contents($img);
-                    }
-                    $base64Image = base64_encode($imageData);
-
-                    if ($assistant !== null) {
-                        $imageResults[] = [
-                            'type'      => 'input_image',
-                            'image_url' => $image,
-                        ];
-                    } else {
-                        $imageResults[] = [
-                            'type'      => 'input_image',
-                            'image_url' => 'data:image/png;base64,' . $base64Image,
-                        ];
-                    }
+        return collect($this->normalizeImageReferences($images))
+            ->map(function (string $image) use ($assistant) {
+                $attachmentService = app(\App\Extensions\AIChatPro\System\Services\AIChatProAttachmentService::class);
+                $isPrivateAttachment = $attachmentService->isPrivateReference($image);
+                $imageData = $this->readImageReference($image);
+                if ($imageData === null) {
+                    return null;
                 }
-            }
+                $base64Image = base64_encode($imageData);
 
-            return $imageResults;
-        })->reject(fn ($value) => empty($value))->flatten(1)->toArray();
+                if ($assistant !== null && ! $isPrivateAttachment) {
+                    return [
+                        'type'      => 'input_image',
+                        'image_url' => $image,
+                    ];
+                }
+
+                return [
+                    'type'      => 'input_image',
+                    'image_url' => 'data:'.($attachmentService->mimeTypeForOwnedReference($image, (int) Auth::id()) ?? 'image/png').';base64,' . $base64Image,
+                ];
+            })
+            ->reject(null)
+            ->values()
+            ->toArray();
     }
 
     private function processImages(array $images, $assistant): array
     {
-        return collect($images)->map(static function ($item) use ($assistant) {
-            if (! empty($item)) {
-                if (Str::startsWith($item, 'http')) {
-                    $imageData = file_get_contents($item);
-                } else {
-                    $imageData = file_get_contents(substr($item, 1));
+        return collect($images)->map(function ($item) use ($assistant) {
+            if (is_string($item) && $item !== '') {
+                $attachmentService = app(\App\Extensions\AIChatPro\System\Services\AIChatProAttachmentService::class);
+                $isPrivateAttachment = $attachmentService->isPrivateReference($item);
+                $imageData = $this->readImageReference($item);
+                if ($imageData === null) {
+                    return null;
                 }
                 $base64Image = base64_encode($imageData);
 
-                if ($assistant !== null) {
+                if ($assistant !== null && ! $isPrivateAttachment) {
                     return [
                         'type'      => 'input_image',
                         'image_url' => $item,
@@ -968,12 +1312,52 @@ class GeneratorController extends Controller
 
                 return [
                     'type'      => 'input_image',
-                    'image_url' => 'data:image/png;base64,' . $base64Image,
+                    'image_url' => 'data:'.($attachmentService->mimeTypeForOwnedReference($item, (int) Auth::id()) ?? 'image/png').';base64,' . $base64Image,
                 ];
             }
 
             return null;
         })->reject(null)->toArray();
+    }
+
+    private function readImageReference(string $image): ?string
+    {
+        try {
+            $attachmentService = app(\App\Extensions\AIChatPro\System\Services\AIChatProAttachmentService::class);
+            if ($attachmentService->isPrivateReference($image)) {
+                $content = $attachmentService->readOwnedReference($image, Auth::id() !== null ? (int) Auth::id() : null);
+                if (! is_string($content) || $content === '') {
+                    throw new \RuntimeException('Private image attachment is not available to this user.');
+                }
+
+                return $content;
+            }
+
+            if (Str::startsWith($image, ['http://', 'https://'])) {
+                $content = @file_get_contents($image);
+            } else {
+                $path = public_path(ltrim($image, '/'));
+                if (! is_file($path)) {
+                    throw new \RuntimeException('Local image attachment is missing.');
+                }
+
+                $content = @file_get_contents($path);
+            }
+
+            if (! is_string($content) || $content === '') {
+                throw new \RuntimeException('Image attachment could not be read.');
+            }
+
+            return $content;
+        } catch (Throwable $exception) {
+            $host = parse_url($image, PHP_URL_HOST);
+            Log::warning('Chat image attachment could not be loaded.', [
+                'host' => is_string($host) ? $host : null,
+                'exception_class' => $exception::class,
+            ]);
+
+            return null;
+        }
     }
 
     private function checkBrandVoice($chat_brand_voice, $brand_voice_prod, $history)
@@ -1172,9 +1556,9 @@ class GeneratorController extends Controller
         } elseif ($default_ai_engine === EngineEnum::GEMINI->value) {
             $chatBot = setting('gemini_default_model', EntityEnum::GEMINI_1_5_FLASH->value);
         } elseif ($default_ai_engine === EngineEnum::ANTHROPIC->value) {
-            $chatBot = setting('anthropic_default_model', EntityEnum::CLAUDE_3_OPUS->value);
+            $chatBot = setting('anthropic_default_model', EntityEnum::CLAUDE_OPUS_4_8->value);
         } elseif ($default_ai_engine === EngineEnum::DEEP_SEEK->value) {
-            $chatBot = setting('deepseek_default_model', EntityEnum::DEEPSEEK_CHAT->value);
+            $chatBot = setting('deepseek_default_model', EntityEnum::DEEPSEEK_V4_PRO->value);
         } elseif ($default_ai_engine === EngineEnum::X_AI->value) {
             $chatBot = setting('xai_default_model', EntityEnum::GROK_2_1212->value);
         } else {

@@ -126,10 +126,10 @@
 						{{ \App\Enums\BedrockEngine::CLAUDE_3_HAIKU->label() }}
 					</option>
 					<option
-							value="{{\App\Enums\BedrockEngine::CLAUDE_3_SONNET->value}}"
-							{{ setting('anthropic_bedrock_model', \App\Enums\BedrockEngine::CLAUDE_3_SONNET->value) == \App\Enums\BedrockEngine::CLAUDE_3_SONNET->value ? 'selected' : null }}
+							value="{{\App\Enums\BedrockEngine::CLAUDE_SONNET_5_5->value}}"
+							{{ setting('anthropic_bedrock_model', \App\Enums\BedrockEngine::CLAUDE_SONNET_5_5->value) == \App\Enums\BedrockEngine::CLAUDE_SONNET_5_5->value ? 'selected' : null }}
 					>
-						{{ \App\Enums\BedrockEngine::CLAUDE_3_SONNET->label() }}
+						{{ \App\Enums\BedrockEngine::CLAUDE_SONNET_5_5->label() }}
 					</option>
 				</select>
 			</div>
@@ -185,11 +185,11 @@
 				class="btn btn-primary w-full"
 				id="settings_button"
 				form="settings_form"
+				type="submit"
 				{{--            onclick="checkMaxOutputLength()" --}}
 		>
 			{{ __('Save') }}
 		</button>
-	</div>
 </form>
 @endsection
 
@@ -207,6 +207,6 @@
         }
     </script>
 
-    <script src="{{ custom_theme_url('/assets/js/panel/settings.js') }}"></script>
+    <script src="{{ custom_theme_url('/assets/js/panel/settings.js?v=' . filemtime(public_path('themes/default/assets/js/panel/settings.js'))) }}"></script>
     <script src="{{ custom_theme_url('/assets/libs/select2/select2.min.js') }}"></script>
 @endpush

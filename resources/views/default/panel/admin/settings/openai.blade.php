@@ -111,6 +111,8 @@
             @include('panel.admin.settings.particles.gpt-image-1')
             @include('panel.admin.settings.particles.gpt-image-1-5')
             @include('panel.admin.settings.particles.gpt-image-2')
+            @include('panel.admin.settings.particles.gpt-image-2-5-sunburst')
+            @include('panel.admin.settings.particles.gpt-image-2-5-flare')
 
             <div class="col-md-12">
                 <div class="mb-3">
@@ -126,7 +128,7 @@
                                     type="checkbox"
                                     name="dalle_hidden"
                                     :checked="setting('dalle_hidden') == 1"
-                                    label="{{ __('Hide Dall-E from AI Image') }}"
+                                    label="{{ __('Hide OpenAI image models from AI Image') }}"
                                     switcher
                                 />
                             </div>
@@ -134,12 +136,10 @@
                         @php
                             $openaiImageDrivers = \App\Domains\Entity\EntityStats::image()->filterByEngine(\App\Domains\Engine\Enums\EngineEnum::OPEN_AI)->list();
 
-                            $openaiImageDrivers = $openaiImageDrivers->reject(fn($value) => $value instanceof \App\Domains\Entity\Drivers\OpenAI\GptImage1Driver);
-
-                            $current_dall_e_model = EntityEnum::fromSlug($settings_two->dalle ?? EntityEnum::DALL_E_2->slug())->slug();
+                            $current_dall_e_model = \App\Helpers\Classes\DefaultOpenAiImageModel::slug($settings_two);
                         @endphp
                         <x-model-select-list-with-change-alert
-                            :listLabel="'OpenAI Default Dall-E Model'"
+                            :listLabel="'OpenAI Default Image Model'"
                             :listId="'dalle_default_model'"
                             currentModel="{{ $current_dall_e_model }}"
                             :drivers="$openaiImageDrivers"

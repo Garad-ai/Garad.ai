@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Domains\Entity\Enums\EntityEnum;
+use App\Helpers\Classes\DefaultOpenAiImageModel;
 use App\Models\SettingTwo;
 
 class GeneratorMappingService
@@ -13,9 +14,15 @@ class GeneratorMappingService
      * Map an image generator identifier to its corresponding EntityEnum.
      *
      * Mirrors the resolution logic from AIController::imageOutput().
+     *
+     * Accepts the raw enum value (gpt-image-2.5-sunburst), the URL-safe slug
+     * form (gpt-image-2__5-sunburst, as sent by the AI Image Pro cost preview),
+     * and the underscore tab keys (gpt_image_2_5_sunburst).
      */
     public function mapGeneratorToEntity(string $generator, ?string $action = null): ?EntityEnum
     {
+        $generator = str_replace('__', '.', $generator);
+
         return match ($generator) {
             'openai'             => $this->getDefaultOpenAiImageModel(),
             'stable_diffusion'   => $this->getStableDiffusionDefaultModel(),
@@ -24,7 +31,13 @@ class GeneratorMappingService
             'gpt-image-1.5',
             'gpt-image-1-5',
             'gpt_image_1_5'     => EntityEnum::GPT_IMAGE_1_5,
-            'flux-pro'          => $this->getDefaultFalAiModel(),
+            'gpt-image-2',
+            'gpt_image_2'       => EntityEnum::GPT_IMAGE_2,
+            'gpt-image-2.5-sunburst',
+            'gpt_image_2_5_sunburst' => EntityEnum::GPT_IMAGE_2_5_SUNBURST,
+            'gpt-image-2.5-flare',
+            'gpt_image_2_5_flare'    => EntityEnum::GPT_IMAGE_2_5_FLARE,
+            'flux-pro'               => $this->getDefaultFalAiModel(),
             'flux-pro-kontext',
             'flux-pro/kontext/text-to-image' => EntityEnum::FLUX_PRO_KONTEXT_TEXT_TO_IMAGE,
             'flux-pro/kontext'               => $this->resolveFluxProKontext($action),
@@ -66,22 +79,14 @@ class GeneratorMappingService
 
     private function getDefaultOpenAiImageModel(): EntityEnum
     {
-        $settingsTwo = SettingTwo::getCache();
-
-        $default = match ($settingsTwo->dalle) {
-            'dalle3' => EntityEnum::DALL_E_3->slug(),
-            'dalle2' => EntityEnum::DALL_E_2->slug(),
-            default  => $settingsTwo->dalle,
-        };
-
-        return EntityEnum::fromSlug($default) ?? EntityEnum::DALL_E_2;
+        return DefaultOpenAiImageModel::resolve();
     }
 
     private function getStableDiffusionDefaultModel(): EntityEnum
     {
         $settingsTwo = SettingTwo::getCache();
 
-        return EntityEnum::fromSlug($settingsTwo?->stablediffusion_default_model) ?? EntityEnum::SD_3;
+        return EntityEnum::fromSlug($settingsTwo?->stablediffusion_default_model) ?? EntityEnum::SD_3_5_LARGE;
     }
 
     private function getDefaultFalAiModel(): EntityEnum

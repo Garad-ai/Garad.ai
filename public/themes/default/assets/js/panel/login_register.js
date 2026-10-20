@@ -1,6 +1,7 @@
 //LOGIN
 function LoginForm() {
 	'use strict';
+	const appBasePath = window.location.pathname.replace(/\/login\/?$/, '');
 
 	document.getElementById('LoginFormButton').disabled = true;
 	document.getElementById('LoginFormButton').innerHTML = magicai_localize.please_wait;
@@ -52,17 +53,23 @@ function LoginForm() {
 			toastr.success(magicai_localize.login_redirect);
 
 			var href = (data && typeof data.link === 'string') ? data.link : '/dashboard/user';
+			if (href.startsWith('/')) {
+				href = appBasePath + href;
+			}
 			window.location.href = href;
 			// Alpine.store('appLoadingIndicator').hide();
 		},
 		error: function (data) {
-			if (data.responseJSON.errors) {
-				var err = data.responseJSON.errors;
+			const response = data.responseJSON || {};
+			if (response.errors) {
+				var err = response.errors;
 				$.each(err, function (index, value) {
 					toastr.error(value);
 				});
-			} else if (data.responseJSON.message) {
-				toastr.error(data.responseJSON.message);
+			} else if (response.message) {
+				toastr.error(response.message);
+			} else {
+				toastr.error(magicai_localize.login_error || 'Unable to sign in. Please try again.');
 			}
 			document.getElementById('LoginFormButton').disabled = false;
 			document.getElementById('LoginFormButton').innerHTML = magicai_localize.sign_in;
@@ -75,6 +82,7 @@ function LoginForm() {
 //REGISTER
 function RegisterForm() {
 	'use strict';
+	const appBasePath = window.location.pathname.replace(/\/register\/?$/, '');
 
 	const btn = document.getElementById('RegisterFormButton');
 	btn.disabled = true;
@@ -232,4 +240,3 @@ function PasswordReset(password_reset_code) {
 	});
 	return false;
 }
-

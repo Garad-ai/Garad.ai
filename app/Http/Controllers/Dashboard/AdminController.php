@@ -1886,18 +1886,121 @@ class AdminController extends Controller
         $settings = Setting::getCache();
         $auth = json_decode($settings->auth_view_options);
 
-        return view('panel.admin.frontend.auth', compact('auth'));
+        $describe = static function (?string $path): ?array {
+            if (empty($path) || ! is_file(public_path($path))) {
+                return null;
+            }
+
+            $size = @getimagesize(public_path($path));
+
+            return [
+                'path'   => $path,
+                'bytes'  => filesize(public_path($path)),
+                'width'  => $size[0] ?? null,
+                'height' => $size[1] ?? null,
+            ];
+        };
+
+        $slides = collect($auth?->slides ?? [])
+            ->map(fn ($path) => $describe($path))
+            ->filter()
+            ->values()
+            ->all();
+
+        $video = (! empty($auth?->video) && is_file(public_path($auth->video)))
+            ? ['path' => $auth->video, 'bytes' => filesize(public_path($auth->video))]
+            : null;
+
+        $bottomImage = $describe($auth?->bottom_image ?? null);
+
+        return view('panel.admin.frontend.auth', compact('auth', 'slides', 'video', 'bottomImage'));
     }
 
     public function authSettingsSave(Request $request)
     {
         if (Helper::appIsNotDemo()) {
+            $request->validate([
+                'slide_images'       => 'nullable|array|max:5',
+                'slide_images.*'     => 'image|mimes:jpg,jpeg,png,webp,gif|max:5120',
+                'auth_video'         => 'nullable|file|mimetypes:video/mp4,video/webm|max:51200',
+                'bottom_image'       => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
+                'overlay_review'     => 'nullable|string|max:120',
+                'overlay_badge'      => 'nullable|string|max:60',
+                'remove_slides'      => 'nullable|array',
+                'remove_slides.*'    => 'string',
+            ]);
+
             $settings = Setting::getCache();
             $old_auth = json_decode($settings->auth_view_options);
 
             $auth = [
                 'login_enabled' => $request->login_enabled ?? 0,
             ];
+
+            $authDir = 'upload/images/auth/';
+            $isAuthFile = static fn ($path) => is_string($path)
+                && str_starts_with($path, $authDir)
+                && ! str_contains($path, '..');
+            $deleteFile = static function ($path) use ($isAuthFile) {
+                if ($isAuthFile($path) && is_file(public_path($path))) {
+                    @unlink(public_path($path));
+                }
+            };
+
+            // slideshow images (max 5)
+            $slides = array_values(array_filter((array) ($old_auth?->slides ?? []), $isAuthFile));
+            foreach ((array) $request->input('remove_slides', []) as $remove) {
+                if (($key = array_search($remove, $slides, true)) !== false) {
+                    $deleteFile($remove);
+                    unset($slides[$key]);
+                }
+            }
+            $slides = array_values($slides);
+
+            $newSlides = array_values(array_filter((array) $request->file('slide_images', [])));
+            if (count($slides) + count($newSlides) > 5) {
+                return response()->json([
+                    'errors' => ['slide_images' => [__('You can have at most 5 images.')]],
+                ], 422);
+            }
+            foreach ($newSlides as $slide) {
+                $name = Str::random(8) . '-auth-slide.' . $slide->guessExtension();
+                $slide->move($authDir, $name);
+                $slides[] = $authDir . $name;
+            }
+            $auth['slides'] = $slides;
+
+            // background video
+            $video = $old_auth?->video ?? null;
+            if ($request->boolean('remove_video') || $request->hasFile('auth_video')) {
+                $deleteFile($video);
+                $video = null;
+            }
+            if ($request->hasFile('auth_video')) {
+                $file = $request->file('auth_video');
+                $name = Str::random(8) . '-auth-video.' . ($file->guessExtension() === 'webm' ? 'webm' : 'mp4');
+                $file->move($authDir, $name);
+                $video = $authDir . $name;
+            }
+            $auth['video'] = $video;
+
+            // bottom image (e.g. Trustpilot / SOC2 badge)
+            $bottom = $old_auth?->bottom_image ?? null;
+            if ($request->boolean('remove_bottom_image') || $request->hasFile('bottom_image')) {
+                $deleteFile($bottom);
+                $bottom = null;
+            }
+            if ($request->hasFile('bottom_image')) {
+                $file = $request->file('bottom_image');
+                $name = Str::random(8) . '-auth-bottom.' . $file->guessExtension();
+                $file->move($authDir, $name);
+                $bottom = $authDir . $name;
+            }
+            $auth['bottom_image'] = $bottom;
+
+            $auth['overlay_review'] = $request->has('overlay_review') ? trim((string) $request->input('overlay_review')) : ($old_auth?->overlay_review ?? '');
+            $auth['overlay_badge'] = '';
+
             // move image to correct location
             if ($request->hasFile('login_image')) {
                 $path = 'upload/images/auth/';

@@ -6,7 +6,10 @@ namespace App\Extensions\AIAgent\System\Enums;
 
 enum WorkflowRunStatusEnum: string
 {
-    case Running   = 'running';
+    case Running = 'running';
+    case Cancelling = 'cancelling';
+    case Cancelled = 'cancelled';
+    case PendingApproval = 'pending_approval';
     case Completed = 'completed';
-    case Failed    = 'failed';
+    case Failed = 'failed';
 }

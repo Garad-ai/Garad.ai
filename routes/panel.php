@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\Config\SeoController;
 use App\Http\Controllers\Admin\Config\SmtpController;
 use App\Http\Controllers\Admin\Config\StorageController;
 use App\Http\Controllers\Admin\ElevenLabsLibraryController;
+use App\Http\Controllers\Admin\Finance\AiPlanWizardController;
 use App\Http\Controllers\Admin\Finance\CreditMigrationController;
 use App\Http\Controllers\Admin\Finance\PlanController;
 use App\Http\Controllers\Admin\Finance\SharedCreditCostController;
@@ -65,6 +66,7 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\Payment\PlanAndPricingController;
 use App\Http\Controllers\PremiumSupportController;
 use App\Http\Controllers\PromptController;
+use App\Http\Controllers\Settings\HeygenSettingController;
 use App\Http\Controllers\Settings\SearchapiSettingController;
 use App\Http\Controllers\Team\TeamController;
 use App\Http\Controllers\Themes\ThemeController;
@@ -179,7 +181,9 @@ Route::middleware(['auth', 'updateUserActivity'])
                     Route::get('{workbook_slug?}', [GeneratorController::class, 'index'])->name('index')->middleware(CheckTemplateTypeAndPlan::class);
                     Route::get('/option/{slug}', [GeneratorController::class, 'generatorOptions'])->name('options')->middleware(CheckTemplateTypeAndPlan::class);
 
-                    Route::post('/generate-stream', [GeneratorController::class, 'buildStreamedOutput'])->name('stream.generate')->middleware('surveyMiddleware');
+                    Route::post('/generate-stream', [GeneratorController::class, 'buildStreamedOutput'])
+                        ->name('stream.generate')
+                        ->middleware('surveyMiddleware');
                     Route::post('/reduce-tokens/{type}', [GeneratorController::class, 'reduceTokensWhenIntterruptStream'])->name('reduce-tokens');
                 });
 
@@ -215,8 +219,6 @@ Route::middleware(['auth', 'updateUserActivity'])
                         Route::get('/generate', [AIController::class, 'streamedTextOutput']);
 
                         Route::post('/getYoutubeCaptions', [AIController::class, 'getYoutubeCaptions']);
-
-                        Route::post('/check/videoprogress', [AIController::class, 'checkVideoProgress']);
 
                         Route::get('/rewrite', [AIController::class, 'reWrite'])->name('rewriter')->middleware(CheckTemplateTypeAndPlan::class);
 
@@ -275,6 +277,7 @@ Route::middleware(['auth', 'updateUserActivity'])
                             Route::post('/rename-chat', [AIChatController::class, 'renameChat']);
                             Route::post('/pin-conversation', [AIChatController::class, 'pinConversation']);
 
+                            Route::get('/voice-status', [AIChatController::class, 'voiceStatus'])->name('voice-status');
                             Route::post('/transaudio', [AIChatController::class, 'transAudio']);
 
                             Route::controller(PromptController::class)->group(static function () {
@@ -566,6 +569,13 @@ Route::middleware(['auth', 'updateUserActivity'])
                 // Finance
                 Route::prefix('finance')->name('finance.')->group(function () {
 
+                    Route::prefix('plan/ai-wizard')->name('plan.ai-wizard.')->group(function () {
+                        Route::get('presets', [AiPlanWizardController::class, 'presets'])->name('presets');
+                        Route::post('validate-step', [AiPlanWizardController::class, 'validateStep'])->name('validate-step');
+                        Route::post('chat', [AiPlanWizardController::class, 'chat'])->name('chat');
+                        Route::post('store', [AiPlanWizardController::class, 'store'])->name('store');
+                    });
+
                     Route::resource('plan', PlanController::class)->except(
                         'store', 'update', 'destroy', 'show'
                     );
@@ -661,6 +671,9 @@ Route::middleware(['auth', 'updateUserActivity'])
 
                 // Settings
                 Route::prefix('settings')->name('settings.')->group(function () {
+                    Route::get('heygen', [HeygenSettingController::class, 'index'])->name('heygen');
+                    Route::post('heygen', [HeygenSettingController::class, 'update'])->name('heygen.update');
+
                     Route::get('/general', [SettingsController::class, 'general'])->name('general');
                     Route::post('/general-save', [SettingsController::class, 'generalSave']);
 

@@ -111,7 +111,7 @@ class TTSController extends Controller
         $speechifyService = $this->hasSpeechifySpeech($speeches) ? new SpeechifyService : null;
 
         foreach ($speeches as $speech) {
-            $model = $this->getAIModel($speech['platform'], $speech['pace']);
+            $model = $this->resolveBillingModel($request, $speech);
             $driver = Entity::driver($model)->input($speech['content'])->calculateCredit();
             $langsAndVoices['language'][] = $speech['lang'];
             $langsAndVoices['voices'][] = $speech['voice'];
@@ -135,6 +135,43 @@ class TTSController extends Controller
         $this->saveSpeechRecord($user, $request, $audioName, $wordCount, $langsAndVoices);
 
         return $this->buildResponse($request, $audioName, $user);
+    }
+
+    private function resolveBillingModel(Request $request, array $speech): EntityEnum
+    {
+        $defaultModel = $this->getAIModel($speech['platform'], $speech['pace']);
+
+        if (! $this->isChatVoiceRequest($request, $speech)) {
+            return $defaultModel;
+        }
+
+        $realtimeDriver = Entity::driver(EntityEnum::GPT_REALTIME);
+        if ($realtimeDriver->hasCreditBalance()) {
+            return EntityEnum::GPT_REALTIME;
+        }
+
+        $reasoningModelId = trim((string) $request->input('reasoning_model', ''));
+        $reasoningModel = EntityEnum::tryFrom($reasoningModelId);
+        if (! $reasoningModel) {
+            return $defaultModel;
+        }
+
+        $reasoningDriver = Entity::driver($reasoningModel)
+            ->input((string) ($speech['content'] ?? ''))
+            ->calculateCredit();
+
+        return $reasoningDriver->hasCreditBalanceForInput()
+            ? $reasoningModel
+            : $defaultModel;
+    }
+
+    private function isChatVoiceRequest(Request $request, array $speech): bool
+    {
+        return (bool) $request->input('from_api')
+            && $request->input('voice_context') === 'chat_voice'
+            && (($speech['platform'] ?? null) === EngineEnum::OPEN_AI->slug()
+                || ($speech['platform'] ?? null) === EngineEnum::OPEN_AI->value)
+            && in_array(($speech['pace'] ?? null), ['tts-1', 'tts-1-hd'], true);
     }
 
     private function friendlyTtsErrorMessage(Throwable $e): string

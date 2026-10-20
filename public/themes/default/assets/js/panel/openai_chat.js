@@ -1,5 +1,17 @@
 // cspell:disable
 
+const garadAppBase = window.garadAppBase || window.location.pathname.replace(/\/((chat|login|register)(\/.*)?)?$/, '');
+const garadUrl = (path) => `${garadAppBase}${path}`;
+
+if (window.jQuery && !window.garadAjaxBaseReady) {
+	window.jQuery.ajaxPrefilter((options) => {
+		if (typeof options.url === 'string' && options.url.startsWith('/dashboard')) {
+			options.url = garadUrl(options.url);
+		}
+	});
+	window.garadAjaxBaseReady = true;
+}
+
 /**
  * @typedef {Object} AiResponse
  * @property {{slug: string, label: string}} model - The AI model information
@@ -630,62 +642,724 @@ function renderSkillCard(str) {
 	'</div>' +
 	'</pre>';
 }
+  
+  function garadDecodeHtmlEntities(value) {
+	const textarea = document.createElement('textarea');
+	textarea.innerHTML = value;
+	return textarea.value;
+}
 
-/**
- * The CRM assistant proposes DB writes with a `<<<ACTIONS>>>[...]<<<END_ACTIONS>>>`
- * block. Rewrite it into a markdown-it container so it renders as the Alpine
- * confirmation card instead of raw protocol text. Runs before rendering, so it
- * covers both live streaming and reloaded history in one place.
- *
- * @param {string} string
- * @returns {string}
- */
-function rewriteCrmAssistantActions(string) {
-	if (!string) return string;
+function garadSafeArtifactUrl(value) {
+	try {
+		const url = new URL(value, window.location.origin);
 
-	// History is re-formatted from `contentEl.innerHTML`, where Blade has already
-	// escaped the markers, so both the raw and the entity-encoded form must match.
-	const OPEN = '(?:<<<ACTIONS>>>|&lt;&lt;&lt;ACTIONS&gt;&gt;&gt;)';
-	const CLOSE = '(?:<<<END_ACTIONS>>>|&lt;&lt;&lt;END_ACTIONS&gt;&gt;&gt;)';
+		if (url.origin !== window.location.origin) {
+			return null;
+		}
 
-	if (!new RegExp(OPEN).test(string)) return string;
+		if (
+			!/^\/dashboard\/user\/openai\/chat\/pro\/artifacts\/\d+\/download\/?$/.test(
+				url.pathname
+			)
+		) {
+			return null;
+		}
 
-	string = string.replace(new RegExp(OPEN + '([\\s\\S]*?)' + CLOSE, 'g'), (match, payload) => {
-		let actions;
+		url.search = '';
+		url.hash = '';
 
-		try {
-			actions = JSON.parse(decodeHtmlEntities(payload).trim());
-		} catch (e) {
+		return url.toString();
+	} catch (error) {
+		return null;
+	}
+}
+
+function garadArtifactTypeFromLabel(label = '') {
+	const normalized = `${label}`.toLowerCase();
+
+	if (normalized.includes('pdf')) {
+		return 'pdf';
+	}
+
+	if (
+		normalized.includes('word')
+		|| normalized.includes('docx')
+	) {
+		return 'word';
+	}
+
+	if (
+		normalized.includes('excel')
+		|| normalized.includes('xlsx')
+	) {
+		return 'excel';
+	}
+
+	if (
+		normalized.includes('powerpoint')
+		|| normalized.includes('presentation')
+		|| normalized.includes('ppt')
+	) {
+		return 'slides';
+	}
+
+	return 'file';
+}
+
+function garadArtifactFenceFromMarkup(markup) {
+	try {
+		const template = document.createElement('template');
+
+		template.innerHTML =
+			garadDecodeHtmlEntities(markup).trim();
+
+		const card =
+			template.content.querySelector(
+				'.garad-artifact-result-card'
+			);
+
+		if (!card) {
+			return markup;
+		}
+
+		const labelText =
+			card.querySelector('strong')
+				?.textContent
+				?.trim()
+			|| 'File created';
+
+		const name =
+			card.querySelector('span')
+				?.textContent
+				?.trim()
+			|| 'Garad AI file';
+
+		const href =
+			card.querySelector('a')
+				?.getAttribute('href')
+			|| '';
+
+		const safeUrl =
+			garadSafeArtifactUrl(href);
+
+		if (!safeUrl) {
+			return markup;
+		}
+
+		const cleanLabel =
+			labelText.replace(
+				/\s+created\s*$/i,
+				''
+			);
+
+		const payload = {
+			name,
+			label: cleanLabel || 'File',
+			type:
+				garadArtifactTypeFromLabel(
+					cleanLabel
+				),
+			url: safeUrl,
+		};
+
+		const encoded = btoa(
+			unescape(
+				encodeURIComponent(
+					JSON.stringify(payload)
+				)
+			)
+		);
+
+		return (
+			'\n```garadartifact\n'
+			+ encoded
+			+ '\n```\n'
+		);
+	} catch (error) {
+		return markup;
+	}
+}
+
+function garadPrepareArtifactMarkup(input) {
+	if (
+		typeof input !== 'string'
+		|| !input.includes(
+			'garad-artifact-result-card'
+		)
+	) {
+		return input;
+	}
+
+	let result = input;
+
+	const encodedPattern =
+		/&lt;div\s+class=(?:&quot;|")garad-tool-result-card\s+garad-artifact-result-card(?:&quot;|")[\s\S]*?&lt;\/div&gt;/gi;
+
+	result = result.replace(
+		encodedPattern,
+		match =>
+			garadArtifactFenceFromMarkup(
+				match
+			)
+	);
+
+	const rawPattern =
+		/<div\s+class=["']garad-tool-result-card\s+garad-artifact-result-card["'][\s\S]*?<\/div>/gi;
+
+	result = result.replace(
+		rawPattern,
+		match =>
+			garadArtifactFenceFromMarkup(
+				match
+			)
+	);
+
+	return result;
+}
+
+function garadArtifactIcon(type) {
+	if (type === 'pdf') {
+		return `
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+				stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+				<path d="M14 2v6h6"/>
+				<path d="M7 15h2a1 1 0 0 0 0-2H7v4"/>
+				<path d="M12 17v-4h1.3a2 2 0 0 1 0 4H12"/>
+				<path d="M17 17v-4h3"/>
+			</svg>
+		`;
+	}
+
+	if (type === 'word') {
+		return `
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+				stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+				<path d="M14 2v6h6"/>
+				<path d="m8 13 1 5 2-4 2 4 1-5"/>
+			</svg>
+		`;
+	}
+
+	if (type === 'excel') {
+		return `
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+				stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+				<path d="M14 2v6h6"/>
+				<path d="m8 13 5 5"/>
+				<path d="m13 13-5 5"/>
+			</svg>
+		`;
+	}
+
+	return `
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+			stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+			<path d="M14 2v6h6"/>
+		</svg>
+	`;
+}
+
+function garadRenderArtifactCard(encoded) {
+	try {
+		const payload = JSON.parse(
+			decodeURIComponent(
+				escape(
+					atob(encoded.trim())
+				)
+			)
+		);
+
+		const safeUrl =
+			garadSafeArtifactUrl(
+				payload.url
+			);
+
+		if (!safeUrl) {
 			return '';
 		}
 
-		if (!Array.isArray(actions) || !actions.length) return '';
+		const name =
+			escapeHtml(
+				payload.name
+				|| 'Garad AI file'
+			);
 
-		// base64url so the value stays safe inside markdown-it-attrs syntax
-		const encoded = window.btoa(unescape(encodeURIComponent(JSON.stringify(actions))))
-			.replace(/\+/g, '-')
-			.replace(/\//g, '_')
-			.replace(/=+$/, '');
+		const label =
+			escapeHtml(
+				payload.label
+				|| 'File'
+			);
 
-		return `\n\n::: crm-assistant-action-card {data-actions=${encoded} data-state=pending}\n:::\n\n`;
-	});
+		const type =
+			garadArtifactTypeFromLabel(
+				payload.type
+				|| payload.label
+		);
 
-	// Still streaming: hide the partial block so the raw markers never flash.
-	return string.replace(new RegExp(OPEN + '[\\s\\S]*$'), '');
+		const url =
+			escapeHtml(safeUrl);
+
+		const icon =
+			garadArtifactIcon(type);
+
+		return `
+<pre style="display:contents;all:unset">
+	<div
+		class="garad-artifact-file-card"
+		data-garad-artifact-url="${url}"
+		data-garad-artifact-name="${name}"
+		data-garad-artifact-type="${type}"
+	>
+		<button
+			type="button"
+			class="garad-artifact-file-main"
+			title="Open ${name}"
+		>
+			<span class="garad-artifact-file-icon garad-artifact-${type}">
+				${icon}
+			</span>
+
+			<span class="garad-artifact-file-info">
+				<strong>${name}</strong>
+				<small>${label} · Open file</small>
+			</span>
+		</button>
+
+		<a
+			class="garad-artifact-file-download"
+			href="${url}"
+			title="Download ${name}"
+			aria-label="Download ${name}"
+		>
+			<svg
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.8"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			>
+				<path d="M12 3v12"/>
+				<path d="m7 10 5 5 5-5"/>
+				<path d="M5 21h14"/>
+			</svg>
+		</a>
+	</div>
+</pre>
+		`;
+	} catch (error) {
+		return '';
+	}
 }
 
-/**
- * @param {string} string
- * @returns {string}
- */
-function decodeHtmlEntities(string) {
-	if (!string || string.indexOf('&') === -1) return string;
+function garadEnsureArtifactStyles() {
+	if (
+		document.getElementById(
+			'garad-artifact-ui-styles'
+		)
+	) {
+		return;
+	}
 
-	const el = document.createElement('textarea');
-	el.innerHTML = string;
+	const style =
+		document.createElement('style');
 
-	return el.value;
+	style.id =
+		'garad-artifact-ui-styles';
+
+	style.textContent = `
+.garad-artifact-file-card{
+	display:flex;
+	align-items:center;
+	gap:12px;
+	width:min(100%,560px);
+	margin:14px 0;
+	padding:10px 12px;
+	border:1px solid color-mix(in srgb,currentColor 12%,transparent);
+	border-radius:16px;
+	background:color-mix(in srgb,var(--background,#fff) 94%,currentColor 6%);
+	box-shadow:0 1px 2px rgba(0,0,0,.04);
+	transition:border-color .18s ease,transform .18s ease,background .18s ease;
 }
+.garad-artifact-file-card:hover{
+	border-color:color-mix(in srgb,currentColor 20%,transparent);
+	background:color-mix(in srgb,var(--background,#fff) 90%,currentColor 10%);
+}
+.garad-artifact-file-main{
+	display:flex;
+	align-items:center;
+	gap:12px;
+	flex:1;
+	min-width:0;
+	padding:0;
+	border:0;
+	background:transparent;
+	color:inherit;
+	text-align:start;
+	cursor:pointer;
+}
+.garad-artifact-file-icon{
+	display:grid;
+	place-items:center;
+	flex:0 0 42px;
+	width:42px;
+	height:42px;
+	border-radius:12px;
+	background:color-mix(in srgb,currentColor 8%,transparent);
+}
+.garad-artifact-file-icon svg{
+	width:22px;
+	height:22px;
+}
+.garad-artifact-pdf{
+	color:#e5484d;
+	background:rgba(229,72,77,.11);
+}
+.garad-artifact-word{
+	color:#3975d5;
+	background:rgba(57,117,213,.11);
+}
+.garad-artifact-excel{
+	color:#23885a;
+	background:rgba(35,136,90,.11);
+}
+.garad-artifact-file-info{
+	display:flex;
+	flex-direction:column;
+	min-width:0;
+	line-height:1.35;
+}
+.garad-artifact-file-info strong{
+	overflow:hidden;
+	text-overflow:ellipsis;
+	white-space:nowrap;
+	font-size:14px;
+	font-weight:600;
+}
+.garad-artifact-file-info small{
+	margin-top:3px;
+	color:color-mix(in srgb,currentColor 58%,transparent);
+	font-size:12px;
+}
+.garad-artifact-file-download{
+	display:grid;
+	place-items:center;
+	flex:0 0 38px;
+	width:38px;
+	height:38px;
+	border-radius:10px;
+	color:inherit;
+	transition:background .18s ease;
+}
+.garad-artifact-file-download:hover{
+	background:color-mix(in srgb,currentColor 9%,transparent);
+}
+.garad-artifact-file-download svg{
+	width:20px;
+	height:20px;
+}
+#garad-artifact-viewer{
+	position:fixed;
+	inset:0;
+	z-index:999999;
+	display:none;
+}
+#garad-artifact-viewer.active{
+	display:block;
+}
+.garad-artifact-viewer-backdrop{
+	position:absolute;
+	inset:0;
+	background:rgba(0,0,0,.48);
+	backdrop-filter:blur(2px);
+}
+.garad-artifact-viewer-panel{
+	position:absolute;
+	top:0;
+	right:0;
+	display:flex;
+	flex-direction:column;
+	width:min(58vw,920px);
+	height:100%;
+	background:var(--background,#fff);
+	color:var(--foreground,#111);
+	box-shadow:-18px 0 50px rgba(0,0,0,.20);
+}
+.garad-artifact-viewer-head{
+	display:flex;
+	align-items:center;
+	gap:12px;
+	flex:0 0 auto;
+	min-height:64px;
+	padding:10px 14px;
+	border-bottom:1px solid color-mix(in srgb,currentColor 10%,transparent);
+}
+.garad-artifact-viewer-title{
+	flex:1;
+	min-width:0;
+	overflow:hidden;
+	text-overflow:ellipsis;
+	white-space:nowrap;
+	font-size:14px;
+	font-weight:600;
+}
+.garad-artifact-viewer-action{
+	display:grid;
+	place-items:center;
+	width:40px;
+	height:40px;
+	border:0;
+	border-radius:10px;
+	background:transparent;
+	color:inherit;
+	cursor:pointer;
+}
+.garad-artifact-viewer-action:hover{
+	background:color-mix(in srgb,currentColor 9%,transparent);
+}
+.garad-artifact-viewer-action svg{
+	width:20px;
+	height:20px;
+}
+.garad-artifact-viewer-frame{
+	flex:1;
+	width:100%;
+	height:100%;
+	border:0;
+	background:#f7f7f8;
+}
+@media(max-width:900px){
+	.garad-artifact-viewer-panel{
+		width:100%;
+	}
+}
+	`;
+
+	document.head.appendChild(style);
+}
+
+function garadEnsureArtifactViewer() {
+	garadEnsureArtifactStyles();
+
+	let viewer =
+		document.getElementById(
+			'garad-artifact-viewer'
+		);
+
+	if (viewer) {
+		return viewer;
+	}
+
+	viewer =
+		document.createElement('div');
+
+	viewer.id =
+		'garad-artifact-viewer';
+
+	viewer.innerHTML = `
+		<div
+			class="garad-artifact-viewer-backdrop"
+			data-garad-artifact-close
+		></div>
+
+		<div
+			class="garad-artifact-viewer-panel"
+			role="dialog"
+			aria-modal="true"
+		>
+			<div class="garad-artifact-viewer-head">
+				<div class="garad-artifact-viewer-title">
+					Garad AI File
+				</div>
+
+				<a
+					class="garad-artifact-viewer-action garad-artifact-viewer-download"
+					href="#"
+					title="Download"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M12 3v12"/>
+						<path d="m7 10 5 5 5-5"/>
+						<path d="M5 21h14"/>
+					</svg>
+				</a>
+
+				<button
+					type="button"
+					class="garad-artifact-viewer-action"
+					data-garad-artifact-close
+					title="Close"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M18 6 6 18"/>
+						<path d="m6 6 12 12"/>
+					</svg>
+				</button>
+			</div>
+
+			<iframe
+				class="garad-artifact-viewer-frame"
+				title="Garad AI File Preview"
+			></iframe>
+		</div>
+	`;
+
+	document.body.appendChild(viewer);
+
+	return viewer;
+}
+
+function garadOpenArtifactViewer(
+	url,
+	name
+) {
+	const safeUrl =
+		garadSafeArtifactUrl(url);
+
+	if (!safeUrl) {
+		return;
+	}
+
+	const viewer =
+		garadEnsureArtifactViewer();
+
+	const frame =
+		viewer.querySelector(
+			'.garad-artifact-viewer-frame'
+		);
+
+	const title =
+		viewer.querySelector(
+			'.garad-artifact-viewer-title'
+		);
+
+	const download =
+		viewer.querySelector(
+			'.garad-artifact-viewer-download'
+		);
+
+	const previewUrl =
+		new URL(
+			safeUrl
+		);
+
+	previewUrl.searchParams.set(
+		'preview',
+		'1'
+	);
+
+	title.textContent =
+		name || 'Garad AI File';
+
+	download.href =
+		safeUrl;
+
+	frame.src =
+		previewUrl.toString();
+
+	viewer.classList.add(
+		'active'
+	);
+
+	document.documentElement.style.overflow =
+		'hidden';
+}
+
+function garadCloseArtifactViewer() {
+	const viewer =
+		document.getElementById(
+			'garad-artifact-viewer'
+		);
+
+	if (!viewer) {
+		return;
+	}
+
+	viewer.classList.remove(
+		'active'
+	);
+
+	const frame =
+		viewer.querySelector(
+			'.garad-artifact-viewer-frame'
+		);
+
+	if (frame) {
+		frame.src = 'about:blank';
+	}
+
+	document.documentElement.style.overflow =
+		'';
+}
+
+document.addEventListener(
+	'click',
+	function (event) {
+		const openButton =
+			event.target.closest(
+				'.garad-artifact-file-main'
+			);
+
+		if (openButton) {
+			event.preventDefault();
+
+			const card =
+				openButton.closest(
+					'.garad-artifact-file-card'
+				);
+
+			if (!card) {
+				return;
+			}
+
+			garadOpenArtifactViewer(
+				card.dataset
+					.garadArtifactUrl,
+				card.dataset
+					.garadArtifactName
+			);
+
+			return;
+		}
+
+		if (
+			event.target.closest(
+				'[data-garad-artifact-close]'
+			)
+		) {
+			event.preventDefault();
+
+			garadCloseArtifactViewer();
+		}
+	}
+);
+
+document.addEventListener(
+	'keydown',
+	function (event) {
+		if (event.key === 'Escape') {
+			garadCloseArtifactViewer();
+		}
+	}
+);
 
 /**
  * @param {string} string
@@ -694,18 +1368,13 @@ function decodeHtmlEntities(string) {
  */
 function formatString(string, options = {}) {
 	if (!('markdownit' in window)) return;
-
-	string = rewriteCrmAssistantActions(string);
-
-	string = fixUnclosedMarkdownSyntax(string);
+  
+	string = garadPrepareArtifactMarkup(string);
+    string = fixUnclosedMarkdownSyntax(string);
 
 	string = string
-		.replace(
-			/(?<=\[START_REASONING\])(?:.*?\n\n.*?)(?=\[END_REASONING\]|$)/gs,
-			match => match.replace(/\n\n/g, '\n'),
-		)
-		.replace('[START_REASONING]', '>')
-		.replace('[END_REASONING]', '\n')
+		.replace(/\[START_REASONING\][\s\S]*?\[END_REASONING\]/g, '')
+		.replace(/\[START_REASONING\][\s\S]*$/g, '')
 		.replaceAll('\\(', '$')
 		.replaceAll('\\)', '$')
 		.replaceAll('\\[', '$$')
@@ -717,11 +1386,19 @@ function formatString(string, options = {}) {
 			const language = lang && lang !== '' ? lang : 'md';
 
 			if (language === 'skill') {
-				return renderSkillCard(str);
-			}
+	return renderSkillCard(str);
+}
 
-			const codeString = str;
+if (language === 'garadartifact') {
+	garadEnsureArtifactStyles();
 
+	return garadRenderArtifactCard(
+		str.trim()
+	);
+}
+
+const codeString = str;
+          
 			const highlighted = Prism.highlight(
 				codeString,
 				(Prism.languages[language] != null ? Prism.languages[language] : (language === 'blade' ? Prism.languages.html : Prism.languages.markup)),
@@ -745,7 +1422,6 @@ function formatString(string, options = {}) {
 			'social-media-agent-chat-post-card-images',
 			'social-media-agent-chat-post-card-content',
 			'social-media-agent-chat-post-card-foot',
-			'crm-assistant-action-card',
 			'lqd-chat-image-grid',
 			'smart-images',
 			'entity-highlights',
@@ -786,27 +1462,6 @@ function formatString(string, options = {}) {
 							const token = tokens[idx];
 
 							let attributes = 'class="social-media-agent-chat-post-card" x-data="socialMediaAgentChatPostCard" @social-media-agent-post-updated.window="onPostUpdated" @social-media-agent-post-rejected.window="onPostRejected"';
-
-							if ( token.attrs && token.attrs.length ) {
-								token.attrs.forEach(([ key, val ]) => attributes += ` ${key}="${val}"`);
-							}
-
-							return '<div ' + attributes + '>\n';
-						} else {
-							// closing tag
-							return '</div>\n';
-						}
-					}
-				};
-			}
-
-			if ( container === 'crm-assistant-action-card' ) {
-				options = {
-					render: function (tokens, idx) {
-						if (tokens[idx].nesting === 1) {
-							const token = tokens[idx];
-
-							let attributes = 'class="crm-assistant-action-card" x-data="crmAssistantActionCard"';
 
 							if ( token.attrs && token.attrs.length ) {
 								token.attrs.forEach(([ key, val ]) => attributes += ` ${key}="${val}"`);
@@ -1513,7 +2168,7 @@ function onWordAnimationFinish(responseObj, el) {
 
 		switchGenerateButtonsStatus(aiResponses.every(res => res.responseStreaming));
 
-		if ( responseObj.bubbleEl.querySelector('.social-media-agent-chat-post-card, .crm-assistant-action-card') ) {
+		if ( responseObj.bubbleEl.querySelector('.social-media-agent-chat-post-card') ) {
 			responseObj.bubbleEl.querySelector('.lqd-chat-bubble-canvas-trigger')?.remove();
 			responseObj.bubbleEl.querySelectorAll('[data-copy-options],[data-copy-type]').forEach(el => el.remove());
 		}
@@ -1550,12 +2205,12 @@ function animateNewElements(responseObj) {
 			responseObj.bubbleEl.classList.replace('loading', 'streaming-started');
 
 			el.animate([ { opacity: 1 } ], {
-				duration: 500,
-				easing: 'ease',
+				duration: 120,
+				easing: 'ease-out',
 				fill: 'forwards',
 			})
 				.onfinish = onWordAnimationFinish(responseObj, el);
-		}, index * 20);
+		}, Math.min(index * 4, 80));
 	});
 }
 
@@ -1619,10 +2274,7 @@ function onAiResponse(responseObj) {
 	// When the response contains a social media post card, bypass the VDOM diff
 	// and use direct innerHTML so Alpine can properly initialize the component.
 	// The VDOM's cloneNode approach prevents Alpine from detecting new x-data elements.
-	const hasPostCard = formattedResponse && (
-		formattedResponse.includes('social-media-agent-chat-post-card') ||
-		formattedResponse.includes('crm-assistant-action-card')
-	);
+	const hasPostCard = formattedResponse && formattedResponse.includes('social-media-agent-chat-post-card');
 
 	if (hasPostCard && !responseObj.responseStreaming) {
 		contentEl.innerHTML = formattedResponse;
@@ -2378,8 +3030,11 @@ function sendCouncilModelRequest(type, modelSlug, sharedMessageUUID, councilResp
 		formData.append('realtime', document.getElementById('realtime')?.checked ? 1 : 0);
 		formData.append('chat_brand_voice', document.getElementById('chat_brand_voice')?.value || '');
 		formData.append('brand_voice_prod', document.getElementById('brand_voice_prod')?.value || '');
+	// GARAD_SAFE_V4_SELECTED_TOOL
+	formData.append('garad_selected_tool', window.garadActiveRequestTool || document.getElementById('garad_selected_tool')?.value || '');
 		formData.append('chatbot_front_model', modelSlug);
 		formData.append('assistant', document.getElementById('assistant')?.value || '');
+		formData.append('reasoning_level', document.getElementById('garad_reasoning_level')?.value || 'medium');
 
 		if (document.querySelector('#chat_open_ai_agent_id')?.value) {
 			formData.append('chat_open_ai_agent_id', document.querySelector('#chat_open_ai_agent_id').value);
@@ -2705,6 +3360,26 @@ function handleCouncilStreamPayload(responseObj, payload = {}) {
 	return false;
 }
 
+function garadThinkingStages(text = '') {
+	const t = String(text || '').toLowerCase();
+	if (/pdf|word|docx|document|report|proposal|excel|spreadsheet|xlsx|powerpoint|pptx|slides|presentation|file|fayl/.test(t)) {
+		return ['Understanding the file request…', 'Preparing the content…', 'Creating the file…'];
+	}
+	if (/image|sawir|photo|poster|logo|design/.test(t)) {
+		return ['Understanding the visual request…', 'Preparing the image…', 'Generating…'];
+	}
+	if (/video|fiidiyow|muuqaal|clip/.test(t)) {
+		return ['Understanding the video request…', 'Preparing generation…', 'Generating video…'];
+	}
+	if (/research|search|baar|web|latest|source/.test(t)) {
+		return ['Understanding the research request…', 'Checking context…', 'Preparing the answer…'];
+	}
+	if (/analy|analyse|falanq|summar|upload|attached/.test(t)) {
+		return ['Understanding the request…', 'Analyzing…', 'Preparing the answer…'];
+	}
+	return ['Understanding your request…', 'Working on it…', 'Preparing the answer…'];
+}
+
 function createAiResponses(options = {}) {
 	const { councilMode = false } = options;
 	const aiBubbleTemplateEl = document.querySelector('#chat_ai_bubble');
@@ -2743,10 +3418,19 @@ function createAiResponses(options = {}) {
 
 		bubbleEl.setAttribute('data-model', slug);
 		bubbleEl.classList.add('loading', 'animating-words', multiModelsSelected ? 'w-full' : 'w-auto');
+		
+		const thinkingWrapper = bubbleEl.querySelector('#lqd-typing');
+		const thinkingText = bubbleEl.querySelector('#thinking-text');
+
+		if (thinkingWrapper) {
+			thinkingWrapper.remove();
+		}
+
+		const thinkingInterval = null;
 
 		if (category.slug === 'ai_chat_image') {
-			bubbleEl.querySelector('.chat-content-container')?.classList?.add('flex', 'items-center');
-			bubbleEl.querySelector('.lqd-typing')?.remove();
+			bubbleEl.querySelector('.chat-content-container')?.classList?.add
+			('flex', 'items-center');
 			bubbleEl.querySelector('button')?.remove();
 		}
 
@@ -2801,11 +3485,30 @@ function createAiResponses(options = {}) {
 			request: null,
 			animatingWordIndex: -1,
 			animatedElements: new Set(),
-			lastAnimatedElOffsetTop: 0
+			lastAnimatedElOffsetTop: 0,
+			thinkingWrapper,
+			thinkingText,
+			thinkingInterval
 		});
 
 		appendAiBubblesTo.append(bubbleEl);
 	});
+}
+
+function setGaradToolProgress(responseObj, payload = {}) {
+	if (!responseObj?.bubbleEl) return;
+
+	if (responseObj.thinkingWrapper) {
+		clearInterval(responseObj.thinkingInterval);
+		responseObj.thinkingWrapper.remove();
+		responseObj.thinkingWrapper = null;
+	}
+
+	const container = responseObj.chatContentContainerEl || responseObj.bubbleEl.querySelector('.chat-content-container');
+	const progress = container?.querySelector('.garad-tool-progress');
+	if (progress) {
+		progress.remove();
+	}
 }
 
 /**
@@ -2826,7 +3529,7 @@ function sendRequest(type, images, responseObj, sharedMessageUUID = null, reques
 	const canvasModeActivated = document.querySelector('#create_canvas_button.active');
 	const promptInput = document.getElementById('prompt');
 	const chat_id = document.querySelector('#chat_id')?.value;
-	const throttledOnAiResponse = _.throttle(onAiResponse, 100);
+	const throttledOnAiResponse = _.throttle(onAiResponse, 40);
 	const abortController = new AbortController();
 	const chatsV2 = Alpine.store('chatsV2');
 	let receivedMessageId = false;
@@ -2842,10 +3545,18 @@ function sendRequest(type, images, responseObj, sharedMessageUUID = null, reques
 	formData.append('realtime', realtime?.checked ? 1 : 0);
 	formData.append('chat_brand_voice', chatBrandVoice?.value || '');
 	formData.append('brand_voice_prod', brandVoiceProd?.value || '');
+	// GARAD_SAFE_V4_SELECTED_TOOL
+	formData.append('garad_selected_tool', window.garadActiveRequestTool || document.getElementById('garad_selected_tool')?.value || '');
 	formData.append('chatbot_front_model', responseObj?.model.slug);
 	formData.append('assistant', assistant?.value || '');
+	formData.append('reasoning_level', document.getElementById('garad_reasoning_level')?.value || 'medium');
 	const skillIdsInput = document.getElementById('selected_skill_ids');
+	const editMessageInput = document.getElementById('edit_message_id');
+	const editingMessageId = editMessageInput?.value?.trim?.() || '';
 	formData.append('skill_ids', skillIdsInput?.value || '');
+	if (editingMessageId) {
+		formData.append('edit_message_id', editingMessageId);
+	}
 	if (skillIdsInput) skillIdsInput.value = '';
 
 	if (Array.isArray(requestOptions?.councilModelSlugs)) {
@@ -2908,6 +3619,13 @@ function sendRequest(type, images, responseObj, sharedMessageUUID = null, reques
 		signal: responseObj.abortController.signal,
 		onmessage: async e => {
 			const txt = e.data;
+
+			if (e.event === 'tool_status') {
+				try {
+					setGaradToolProgress(responseObj, JSON.parse(txt || '{}'));
+				} catch (_) {}
+				return;
+			}
 
 			if (e.event === 'chat_not_found') {
 				// Chat was deleted (e.g. empty chat cleanup) — silently reload to generate a new chat
@@ -3101,6 +3819,10 @@ function sendRequest(type, images, responseObj, sharedMessageUUID = null, reques
 					responseObj.bubbleEl.setAttribute('data-message-id', responseId);
 					responseObj.acceptButtonEl?.setAttribute('data-message-id', responseId);
 					responseObj.regenerateButtonEl?.setAttribute('data-message-id', responseId);
+					const latestUserBubble = document.querySelector('.chats-container .lqd-chat-user-bubble:last-of-type');
+					if (latestUserBubble && !latestUserBubble.getAttribute('data-message-id')) {
+						latestUserBubble.setAttribute('data-message-id', responseId);
+					}
 				}
 
 				return;
@@ -3110,6 +3832,12 @@ function sendRequest(type, images, responseObj, sharedMessageUUID = null, reques
 
 			const responseIndex = aiResponses.findIndex(response => response.responseId === responseObj.responseId);
 			const isDoneSignal = txt.includes('[DONE]');
+
+			if (!isDoneSignal && txt && responseObj.thinkingWrapper) {
+				clearInterval(responseObj.thinkingInterval);
+				responseObj.thinkingWrapper.remove();
+				responseObj.thinkingWrapper = null;
+			}
 
 			if (isDoneSignal) {
 				messages.push({
@@ -3173,6 +3901,9 @@ function sendRequest(type, images, responseObj, sharedMessageUUID = null, reques
 				if (responseIndex === aiResponses.length - 1) {
 					window.removeEventListener('beforeunload', onBeforePageUnload);
 				}
+				clearInterval(responseObj.thinkingInterval);
+				responseObj.thinkingWrapper?.remove();
+				responseObj.thinkingWrapper = null;
 				document.dispatchEvent(new CustomEvent('chat:response-complete', {
 					detail: {
 						messageId: responseObj.responseId,
@@ -3261,6 +3992,10 @@ async function startGenerateRequest(ev) {
 	const multiModelsSelected = !councilModeEnabled && selectedModelSlugs.length > 1;
 	const sharedMessageUUID = (multiModelsSelected || councilModeEnabled) ? generateUUID() : null;
 	const chatsV2 = Alpine.store('chatsV2');
+	const editMessageInput = document.getElementById('edit_message_id');
+	const editingMessageId = editMessageInput?.value?.trim?.() || '';
+	const editingTargetBubble = editingMessageId ? chatsContainer.querySelector(`.lqd-chat-user-bubble[data-message-id="${editingMessageId}"]`) : null;
+	const editingAIBubble = editingMessageId ? chatsContainer.querySelector(`.lqd-chat-ai-bubble[data-message-id="${editingMessageId}"]`) : null;
 
 	if (councilModeEnabled && selectedModelSlugs.length < 2) {
 		return toastr.error('Please select at least 2 models for Council Mode.');
@@ -3343,7 +4078,21 @@ async function startGenerateRequest(ev) {
 
 	handlePromptHistory(promptInputValue);
 
-	chatsContainer.insertAdjacentElement('beforeend', userBubbleTemplate);
+	if (editingTargetBubble) {
+		const editingContent = editingTargetBubble.querySelector('.chat-content');
+		if (editingContent) {
+			editingContent.innerHTML = userBubbleTemplate.querySelector('.chat-content')?.innerHTML || promptInputValue;
+		}
+		editingTargetBubble.classList.add('garad-editing-target');
+		let node = editingAIBubble || editingTargetBubble.nextElementSibling;
+		while (node) {
+			const nextNode = node.nextElementSibling;
+			node.remove();
+			node = nextNode;
+		}
+	} else {
+		chatsContainer.insertAdjacentElement('beforeend', userBubbleTemplate);
+	}
 
 	document.dispatchEvent(new CustomEvent('chat:navigator-refresh'));
 
@@ -3452,6 +4201,12 @@ async function startGenerateRequest(ev) {
 		chatAttachments = [];
 		updatePromptFiles();
 
+		aiResponses.forEach(responseObj => setGaradToolProgress(responseObj, {
+			state: 'working',
+			tool: 'file_upload',
+			label: files.length > 1 ? 'Processing files…' : 'Processing file…'
+		}));
+
 		$.ajax({
 			type: 'POST',
 			url: '/files/upload',
@@ -3460,18 +4215,32 @@ async function startGenerateRequest(ev) {
 				_token: document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
 			},
 			success: result => {
+				if (!result || result.error || (!result.path && !result.paths)) {
+					aiResponses.forEach(responseObj => setGaradToolProgress(responseObj, { state: 'completed', tool: 'file_upload', label: 'File processing stopped' }));
+					toastr.error(result?.message || 'The selected file could not be uploaded.');
+					switchGenerateButtonsStatus(false);
+					return;
+				}
+
+				aiResponses.forEach(responseObj => setGaradToolProgress(responseObj, {
+					state: 'working',
+					tool: 'file_analysis',
+					label: 'Analyzing file…'
+				}));
+
 				if (result.type === 'image') {
+					const attachmentRequestType = (chatType === 'chatPro' || chatType === 'chatpro') ? 'chatPro' : 'vision';
 					aiResponses.forEach(responseObj =>
 						sendRequest(
-							'vision',
+							attachmentRequestType,
 							result.path,
 							responseObj,
 							sharedMessageUUID
 						)
 					);
 				} else if (result.type === 'other') {
-					pdfName = result.name;
-					pdfPath = result.path;
+					pdfName = result.name || (Array.isArray(result.names) ? result.names.join(',') : '');
+					pdfPath = result.path || result.paths || '';
 					aiResponses.forEach(responseObj =>
 						sendRequest(
 							'chatPro',
@@ -3486,6 +4255,12 @@ async function startGenerateRequest(ev) {
 
 				promptInput.dispatchEvent(new Event('input', { bubbles: true }));
 			},
+			error: xhr => {
+				const message = xhr?.responseJSON?.message || 'The selected file could not be uploaded.';
+				aiResponses.forEach(responseObj => setGaradToolProgress(responseObj, { state: 'completed', tool: 'file_upload', label: 'File processing stopped' }));
+				toastr.error(message);
+				switchGenerateButtonsStatus(false);
+			}
 		});
 
 		return;
@@ -3556,6 +4331,10 @@ async function startGenerateRequest(ev) {
 	promptInput.value = '';
 	promptInput.style.height = '';
 	promptInput.dispatchEvent(new Event('input', { bubbles: true }));
+	if (editMessageInput) {
+		editMessageInput.value = '';
+	}
+	document.body.classList.remove('garad-editing-mode');
 }
 
 function reduceOnStop() {
@@ -3566,6 +4345,9 @@ function reduceOnStop() {
 		responseObj.abortController?.abort();
 		responseObj.abortController = null;
 		responseObj.responseStreaming = false;
+		clearInterval(responseObj.thinkingInterval);
+		responseObj.thinkingWrapper?.remove();
+		responseObj.thinkingWrapper = null;
 
 		fetch('/dashboard/user/generator/reduce-tokens/chat', {
 			method: 'POST',
@@ -3724,45 +4506,66 @@ function openNewImageDlg(e) {
 }
 
 function isAllowedFileType(data, name) {
-	const allowedFileTypes = {
-		image: [ 'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp' ],
-		document: [
-			'application/pdf',
-			'application/msword',
-			'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-			'application/vnd.ms-excel',
-			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			'text/plain'
-		]
+	const allowedExtensions = new Set([
+		'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp',
+		'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'json', 'xml', 'html', 'htm', 'md', 'ppt', 'pptx',
+		'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm', 'ogg', 'flac', 'aac', 'mov', 'mkv', 'avi', 'm4v'
+	]);
+	const allowedMimes = new Set([
+		'application/pdf',
+		'application/msword',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		'application/vnd.ms-excel',
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+		'application/vnd.ms-powerpoint',
+		'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+		'text/plain', 'text/csv', 'text/markdown', 'application/json', 'application/xml', 'text/xml', 'text/html'
+	]);
+
+	const extensionFrom = value => {
+		let candidate = String(value || '').trim();
+		if (!candidate) return '';
+		try { candidate = decodeURIComponent(candidate); } catch (_) {}
+		candidate = candidate.split('?')[0].split('#')[0];
+		const match = candidate.match(/\.([a-z0-9]+)$/i);
+		return match ? match[1].toLowerCase() : '';
 	};
 
-	const mimeExtensions = {
-		'.png': 'image/png',
-		'.jpg': 'image/jpeg',
-		'.jpeg': 'image/jpeg',
-		'.gif': 'image/gif',
-		'.webp': 'image/webp',
-		'.pdf': 'application/pdf',
-		'.doc': 'application/msword',
-		'.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-		'.xls': 'application/vnd.ms-excel',
-		'.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-		'.txt': 'text/plain'
-	};
-
-	let fileType = null;
-	const mimeMatch = data.match(/^data:([^;]+);/);
-	if (mimeMatch) {
-		fileType = mimeMatch[1];
-	} else {
-		const extMatch = name.match(/\.(\w+)$/);
-		if (!extMatch) return false;
-		const ext = '.' + extMatch[1].toLowerCase();
-		fileType = mimeExtensions[ext] || null;
+	const fileLike = data && typeof data === 'object' ? data : null;
+	const candidates = [
+		name,
+		fileLike?.name,
+		fileLike?.file?.name,
+		fileLike?.path,
+		fileLike?.url,
+		typeof data === 'string' ? data : ''
+	];
+	for (const candidate of candidates) {
+		const ext = extensionFrom(candidate);
+		if (ext && allowedExtensions.has(ext)) return true;
 	}
 
-	return fileType && Object.values(allowedFileTypes).some(arr => arr.includes(fileType));
+	const mimeCandidates = [
+		fileLike?.type,
+		fileLike?.file?.type,
+		fileLike?.mime,
+		fileLike?.mime_type,
+	];
+	for (const candidate of mimeCandidates) {
+		const mime = String(candidate || '').toLowerCase();
+		if (!mime) continue;
+		if (mime.startsWith('image/') || mime.startsWith('audio/') || mime.startsWith('video/') || allowedMimes.has(mime)) {
+			return true;
+		}
+	}
+
+	const dataString = typeof data === 'string' ? data : '';
+	const mimeMatch = dataString.match(/^data:([^;,]+)[;,]/i);
+	if (!mimeMatch) return false;
+	const mime = mimeMatch[1].toLowerCase();
+	return mime.startsWith('image/') || mime.startsWith('audio/') || mime.startsWith('video/') || allowedMimes.has(mime);
 }
+isAllowedFileType.__garadFinalRepair = true;
 
 function updatePromptFiles() {
 	$('#chat-attachment-previews').empty();
@@ -3815,17 +4618,50 @@ function updatePromptFiles() {
 	});
 }
 
-function addFileToChat({ data, name }) {
-	if (chatAttachments.find(attachment => attachment.data === data)) return;
+function addFileToChat({ file, data, name }) {
+	const extensionFrom = value => {
+		let candidate = String(value || '').trim();
+		if (!candidate) return '';
+		try { candidate = decodeURIComponent(candidate); } catch (_) {}
+		candidate = candidate.split('?')[0].split('#')[0];
+		const basename = candidate.split('/').pop() || candidate;
+		return basename;
+	};
 
-	if (!isAllowedFileType(data, name)) {
-		console.warn(`File "${name}" is not allowed.`);
+	const sourceObject = file && typeof file === 'object' ? file : null;
+	let resolvedName = String(
+		name
+		|| sourceObject?.name
+		|| sourceObject?.file?.name
+		|| extensionFrom(sourceObject?.path)
+		|| extensionFrom(sourceObject?.url)
+		|| extensionFrom(typeof data === 'string' ? data : '')
+		|| `attachment-${Date.now()}`
+	).trim();
+
+	if (chatAttachments.find(attachment => attachment.name === resolvedName)) {
+		return;
+	}
+
+	const validationSource = file ?? data;
+	if (!isAllowedFileType(validationSource, resolvedName) && !isAllowedFileType(data, resolvedName)) {
+		console.warn(`File "${resolvedName}" is not allowed.`, {
+			mime: sourceObject?.type || sourceObject?.mime || sourceObject?.mime_type || null,
+			data: typeof data === 'string' ? data.slice(0, 120) : null,
+		});
 		return toastr.error('File is not supported.');
 	}
 
-	chatAttachments.push({ data, name });
+	chatAttachments.push({
+		file: file || null,
+		data: data,
+		name: resolvedName
+	});
+
 	updatePromptFiles();
 }
+window.addFileToChat = addFileToChat;
+window.isAllowedFileType = isAllowedFileType;
 
 function initChat() {
 	var mediaRecorder;
@@ -3992,28 +4828,32 @@ function initChat() {
 	});
 
 	$('#selectImageInput').change(function () {
-		this.files.forEach(file => {
-			let reader = new FileReader();
+	this.files.forEach(file => {
+		let reader = new FileReader();
 
-			reader.onload = function (e) {
-				addFileToChat({ data: e.target.result, name: file.name });
-			};
+		reader.onload = function (e) {
+			addFileToChat({ file: file, data: e.target.result, name: file.name });
+		};
 
-			reader.readAsDataURL(file);
-		});
-
-		if (document.getElementById('mainupscale_src')) {
-			document.getElementById('mainupscale_src').style.display = 'none';
-		}
+		reader.readAsDataURL(file);
 	});
+
+	if (document.getElementById('mainupscale_src')) {
+		document.getElementById('mainupscale_src').style.display = 'none';
+	}
+});
 
 	$('#upscale_src').change(function () {
 		this.files.forEach(file => {
 			let reader = new FileReader();
 
 			reader.onload = function (e) {
-				addFileToChat({ data: e.target.result, name: file.name });
-			};
+    addFileToChat({
+        file: file,
+        data: e.target.result,
+        name: file.name
+    });
+};
 
 			reader.readAsDataURL(file);
 		});
@@ -4056,7 +4896,7 @@ function initChat() {
 
 			throttledRefreshFsLightbox();
 
-			if ( contentEl.querySelector('.social-media-agent-chat-post-card, .crm-assistant-action-card') ) {
+			if ( contentEl.querySelector('.social-media-agent-chat-post-card') ) {
 				aiChatBubble.querySelector('.lqd-chat-bubble-canvas-trigger')?.remove();
 				aiChatBubble.querySelectorAll('[data-copy-options],[data-copy-type]').forEach(el => el.remove());
 			}
@@ -4352,7 +5192,7 @@ function startNewChat(category_id, local, website_url = null) {
 		formData.append('website_url', website_url);
 	}
 
-	let link = '/dashboard/user/openai/chat/start-new-chat';
+	let link = garadUrl('/dashboard/user/openai/chat/start-new-chat');
 
 	if (createChatUrl) {
 		link = createChatUrl;
@@ -4431,7 +5271,7 @@ function deleteAllConv(category_id) {
 		if (website_url != null && website_url != '') {
 			formData.append('website_url', website_url);
 		}
-		let link = '/dashboard/user/openai/chat/clear-chats';
+		let link = garadUrl('/dashboard/user/openai/chat/clear-chats');
 		$.ajax({
 			type: 'post',
 			url: link,
@@ -4472,7 +5312,7 @@ function startNewDocChat(file, type) {
 
 	$.ajax({
 		type: 'post',
-		url: '/dashboard/user/openai/chat/start-new-doc-chat',
+		url: garadUrl('/dashboard/user/openai/chat/start-new-doc-chat'),
 		data: formData,
 		contentType: false,
 		processData: false,
@@ -4542,7 +5382,7 @@ function searchChatFunction() {
 
 	$.ajax({
 		type: 'POST',
-		url: '/dashboard/user/openai/chat/search',
+		url: garadUrl('/dashboard/user/openai/chat/search'),
 		data: formData,
 		contentType: false,
 		processData: false,
@@ -4587,7 +5427,7 @@ function saveResponse(input, response, chat_id, imagePath = '', pdfName = '', pd
 	formData.append('pdfPath', pdfPath);
 	formData.append('outputImage', outputImage);
 	jQuery.ajax({
-		url: '/dashboard/user/openai/chat/low/chat_save',
+		url: garadUrl('/dashboard/user/openai/chat/low/chat_save'),
 		type: 'POST',
 		headers: {
 			'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -4624,8 +5464,12 @@ function dropHandler(ev, id) {
 		let reader = new FileReader();
 
 		reader.onload = function (e) {
-			addFileToChat({ data: e.target.result, name: file.name });
-		};
+    addFileToChat({
+        file: file,
+        data: e.target.result,
+        name: file.name
+    });
+};
 
 		reader.readAsDataURL(file);
 	});
@@ -4687,7 +5531,7 @@ $(document).ready(function () {
 
 		$.ajax({
 			type: 'post',
-			url: '/dashboard/user/openai/chat/rename-chat',
+			url: garadUrl('/dashboard/user/openai/chat/rename-chat'),
 			data: formData,
 			contentType: false,
 			processData: false,
@@ -4711,7 +5555,7 @@ $(document).ready(function () {
 
 			$.ajax({
 				type: 'post',
-				url: '/dashboard/user/openai/chat/delete-chat',
+				url: garadUrl('/dashboard/user/openai/chat/delete-chat'),
 				data: formData,
 				contentType: false,
 				processData: false,
@@ -4837,7 +5681,7 @@ $(document).ready(function () {
 
 		$.ajax({
 			type: 'post',
-			url: '/dashboard/user/openai/chat/pin-conversation',
+			url: garadUrl('/dashboard/user/openai/chat/pin-conversation'),
 			data: JSON.stringify({ pinned: !isPinned, chat_id: chatId }),
 			contentType: 'application/json',
 			success: function (data) {

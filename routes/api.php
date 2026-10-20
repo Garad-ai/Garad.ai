@@ -224,3 +224,83 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/list', 'App\Http\Controllers\Api\EntityController@getAllEntities'); // returns all entities with tokens
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| Garad AI Public Branding
+|--------------------------------------------------------------------------
+| Read-only branding endpoint used by Garad Chat.
+| No authentication/user/session data is exposed here.
+*/
+Route::get('/garad-brand', function () {
+    $s = \App\Models\Setting::first();
+
+    if (!$s) {
+        return response()->json([
+            'ok' => false,
+            'error' => 'branding_not_found',
+        ], 404);
+    }
+
+    $base = rtrim((string) ($s->site_url ?: 'https://garad.ai'), '/');
+
+    $asset = static function ($path) use ($base) {
+        $path = trim((string) $path);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        return $base . '/' . ltrim($path, '/');
+    };
+
+    return response()->json([
+        'ok' => true,
+
+        'site_name' => $s->site_name ?: 'Garad AI',
+        'site_url'  => $base,
+
+        'favicon' => $asset(
+            $s->favicon_path ?? $s->favicon ?? null
+        ),
+
+        'logo' => $asset(
+            $s->logo_path ?? $s->logo ?? null
+        ),
+
+        'logo_dark' => $asset(
+            $s->logo_dark_path ?? $s->logo_dark ?? null
+        ),
+
+        'logo_dashboard' => $asset(
+            $s->logo_dashboard_path ?? $s->logo_dashboard ?? null
+        ),
+
+        'logo_dashboard_dark' => $asset(
+            $s->logo_dashboard_dark_path ?? $s->logo_dashboard_dark ?? null
+        ),
+
+        'updated_at' => $s->updated_at
+            ? $s->updated_at->toIso8601String()
+            : null,
+    ])->header(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate'
+    );
+});
+
+/*
+|--------------------------------------------------------------------------
+| Garad Chat - live user model catalog
+|--------------------------------------------------------------------------
+| Server-to-server read-only endpoint used by staging-chat.garad.ai.
+*/
+Route::get(
+    '/garad-chat/models',
+    [\App\Http\Controllers\Api\GaradChatModelsController::class, 'index']
+);
+

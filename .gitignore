@@ -1,41 +1,50 @@
-/node_modules
-/public/hot
-/public/storage
-/storage/*.key
-/vendor
+# Environment files and secrets
 .env
-.env.backup
-.env.production
-*.sql
-*.dump
-error_log
-.phpunit.result.cache
-Homestead.json
-Homestead.yaml
-npm-debug.log
-yarn-error.log
-/.fleet
-/.idea
-/.vscode
-.DS_Store
-Thumbs.db
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
 
-# Storage ignore
-/storage/app/*
+# Dependencies and generated frontend output
+**/node_modules/
+**/dist/
+/vendor/
+/public/build/
+/public/garad-ai-chat-pro/dist/
+/frontend/artifacts/verification/
+
+# Laravel runtime data and caches
+/bootstrap/cache/*.php
+/storage/framework/
+/storage/logs/
+/storage/app/
 !/storage/app/.gitignore
 !/storage/app/public/.gitignore
-/storage/framework/cache/*
-!/storage/framework/cache/.gitignore
-/storage/framework/sessions/*
-!/storage/framework/sessions/.gitignore
-/storage/framework/testing/*
-!/storage/framework/testing/.gitignore
-/storage/framework/views/*
-!/storage/framework/views/.gitignore
-/storage/logs/*
-!/storage/logs/.gitignore
+/storage/app/private/
+/storage/app/public/*
+/.phpunit.cache/
+/.phpunit.result.cache
+/public/storage
+/public/upload/
+/public/uploads/
+/public/downloads/
 
-# Residual uploads & zip archives
-/public/uploads/*
-!/public/uploads/.gitkeep
-*.zip
+# Local databases, dumps, logs, and backups
+/garad.sql
+/*.sql
+/*.sql.*
+/*.dump
+/*.bak
+/error_log
+/*-errors.txt
+*.log
+/app/Extensions/AIChatPro/garad_garad_magicai.sql
+/app/Extensions.zip
+
+# Local bundles and old deployment snapshots
+/downloads/
+/garadchatpro28-fix/
+/garadchatpro29-full/

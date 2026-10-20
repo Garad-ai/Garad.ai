@@ -29,6 +29,16 @@ class ViewServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $requestPath = '/' . ltrim(request()->path(), '/');
+        $skipChatViewSetup = (
+            str_ends_with($requestPath, '/dashboard/user/openai/chat/start-new-chat')
+            || str_ends_with($requestPath, '/dashboard/user/generator/generate-stream')
+        );
+
+        if ($skipChatViewSetup) {
+            return;
+        }
+
         $this->sharedAppStatus();
         Paginator::useBootstrap();
 

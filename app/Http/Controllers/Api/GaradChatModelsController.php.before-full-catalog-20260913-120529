@@ -1,0 +1,77 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Domains\Entity\Models\Entity;
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class GaradChatModelsController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        /*
+         * Server-to-server only.
+         * Secret must match LibreChat GARAD_CHAT_BRIDGE_SECRET.
+         */
+        $expected = trim((string) config('garad_staging_sso.secret', ''));
+        $provided = trim((string) $request->header('X-Garad-Bridge-Secret', ''));
+
+        abort_if(
+            $expected === '' ||
+            $provided === '' ||
+            ! hash_equals($expected, $provided),
+            401,
+            'Unauthorized'
+        );
+
+        $email = strtolower(trim((string) $request->query('email', '')));
+
+        abort_if($email === '', 422, 'User email is required.');
+
+        $user = User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        abort_if(! $user, 404, 'Garad AI user was not found.');
+
+        /*
+         * Entity::planModels() reads the current authenticated user's plan.
+         * Set only for the lifetime of this request.
+         */
+        Auth::setUser($user);
+
+        $models = collect(Entity::planModels())
+            ->filter(function ($entity) {
+                try {
+                    return $entity->key?->isChatModel() === true;
+                } catch (\Throwable) {
+                    return true;
+                }
+            })
+            ->map(function ($entity) {
+                $engine = $entity->engine;
+
+                return [
+                    'id'       => $entity->key?->value ?? (string) $entity->key,
+                    'name'     => $entity->title ?: ($entity->key?->value ?? 'AI Model'),
+                    'engine'   => $engine?->value ?? (string) $engine,
+                    'provider' => $engine?->label() ?? ($engine?->value ?? 'Garad AI'),
+                ];
+            })
+            ->filter(fn ($model) => ! empty($model['id']))
+            ->values();
+
+        return response()->json([
+            'ok'     => true,
+            'user'   => [
+                'id'    => $user->id,
+                'email' => $user->email,
+            ],
+            'models' => $models,
+        ]);
+    }
+}

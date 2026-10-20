@@ -36,6 +36,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -1093,6 +1094,62 @@ class VideoEditorAiController extends Controller
     //  AI MUSIC GENERATION
     // =========================================================================
 
+    public function musicModels(): JsonResponse
+    {
+        $models = [
+            [
+                'id' => 'music_v2',
+                'name' => 'ElevenLabs Music v2',
+                'description' => 'Latest model for high-quality instrumental music.',
+                'provider' => 'elevenlabs',
+                'supportsDuration' => true,
+                'supportsLyrics' => false,
+                'supportsImages' => false,
+                'supportsVideo' => false,
+                'outputFormats' => ['mp3'],
+            ],
+            [
+                'id' => 'music_v1',
+                'name' => 'ElevenLabs Music v1',
+                'description' => 'Instrumental music generation with commercial licensing.',
+                'provider' => 'elevenlabs',
+                'supportsDuration' => true,
+                'supportsLyrics' => false,
+                'supportsImages' => false,
+                'supportsVideo' => false,
+                'outputFormats' => ['mp3'],
+            ],
+            [
+                'id' => 'lyria-3-clip-preview',
+                'name' => 'Google Lyria 3 Clip',
+                'description' => 'Short music clips with optional visual inspiration.',
+                'provider' => 'lyria3clip',
+                'supportsDuration' => false,
+                'supportsLyrics' => true,
+                'supportsImages' => true,
+                'supportsVideo' => true,
+                'outputFormats' => ['mp3'],
+            ],
+            [
+                'id' => 'lyria-3-pro-preview',
+                'name' => 'Google Lyria 3 Pro',
+                'description' => 'Full-length songs with lyrics and optional visual inspiration.',
+                'provider' => 'lyria3pro',
+                'supportsDuration' => false,
+                'supportsLyrics' => true,
+                'supportsImages' => true,
+                'supportsVideo' => true,
+                'outputFormats' => ['mp3', 'wav'],
+            ],
+        ];
+
+        $models = array_values(array_filter($models, function (array $model): bool {
+            return $this->isMusicProviderConfigured($model['provider']);
+        }));
+
+        return response()->json(['status' => 'success', 'models' => $models]);
+    }
+
     /**
      * Generate music using whichever provider AiMusicPro is configured to use
      * (ai_music_pro_default_provider setting). Mirrors AiMusicProController's
@@ -1111,26 +1168,54 @@ class VideoEditorAiController extends Controller
         @ini_set('memory_limit', '-1');
         @ini_set('max_execution_time', 36000);
 
-        $provider = setting('ai_music_pro_default_provider', 'elevenlabs');
+        $selectedModel = (string) $request->input('model', '');
+        $provider = match ($selectedModel) {
+            'music_v1', 'music_v2' => 'elevenlabs',
+            'lyria-3-clip-preview' => 'lyria3clip',
+            'lyria-3-pro-preview' => 'lyria3pro',
+            default => setting('ai_music_pro_default_provider', 'elevenlabs'),
+        };
+        if (! $this->isMusicProviderConfigured($provider)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => __('The selected music provider is not configured. Please contact your administrator.'),
+            ], 503);
+        }
 
         $rules = [
             'prompt'     => ['required', 'string', 'max:2000'],
+            'title'      => ['nullable', 'string', 'max:120'],
             'style'      => ['nullable', 'string', 'max:190'],
             'project_id' => ['nullable', 'integer'],
+            'model'      => ['nullable', 'string', 'in:music_v1,music_v2,lyria-3-clip-preview,lyria-3-pro-preview'],
+            'instrumental' => ['nullable', 'boolean'],
         ];
 
         if ($provider === 'elevenlabs') {
             $rules['duration'] = ['nullable', 'integer', 'min:10', 'max:300'];
         } else {
             $rules['lyrics'] = ['nullable', 'string', 'max:5000'];
-            $rules['images'] = ['nullable', 'array', 'max:10'];
+            $rules['images'] = ['nullable', 'array', 'max:' . ($request->hasFile('video') ? 9 : 10)];
             $rules['images.*'] = ['image', 'max:25600'];
+            $rules['video'] = ['nullable', 'file', 'mimes:mp4,mov,webm', 'max:51200'];
             if ($provider === 'lyria3pro') {
                 $rules['output_format'] = ['nullable', 'in:mp3,wav'];
             }
         }
 
         $request->validate($rules);
+        $allowedModels = match ($provider) {
+            'lyria3clip' => ['lyria-3-clip-preview'],
+            'lyria3pro' => ['lyria-3-pro-preview'],
+            default => ['music_v1', 'music_v2'],
+        };
+        $selectedModel = $selectedModel ?: $allowedModels[0];
+        if (! in_array($selectedModel, $allowedModels, true)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => __('The selected music model is not available for the configured provider.'),
+            ], 422);
+        }
 
         $entityEnum = match ($provider) {
             'lyria3clip' => EntityEnum::LYRIA_3_CLIP,
@@ -1156,10 +1241,10 @@ class VideoEditorAiController extends Controller
 
         try {
             $result = $provider === 'elevenlabs'
-                ? $this->generateMusicWithElevenlabs($request)
+                ? $this->generateMusicWithElevenlabs($request, $selectedModel)
                 : $this->generateMusicWithLyria(
                     $request,
-                    $provider === 'lyria3clip' ? 'lyria-3-clip-preview' : 'lyria-3-pro-preview'
+                    $selectedModel
                 );
         } catch (Exception $e) {
             Log::error('VideoEditor Music error: ' . $e->getMessage());
@@ -1182,13 +1267,16 @@ class VideoEditorAiController extends Controller
 
         // Persist as VideoEditorMedia so the audio appears in the library
         $fileUrl = $result['file_url'];
+        $outputFormat = $request->input('output_format', 'mp3');
         $media = new VideoEditorMedia([
             'video_editor_project_id' => $request->input('project_id'),
             'type'                    => 'audio',
             'filename'                => basename($fileUrl),
-            'original_filename'       => 'AI Music - ' . Str::limit($request->input('prompt'), 30),
+            'original_filename'       => 'AI Music - ' . ($request->filled('title')
+                ? Str::limit($request->input('title'), 120)
+                : Str::limit($request->input('prompt'), 30)),
             'path'                    => $fileUrl,
-            'mime_type'               => 'audio/mpeg',
+            'mime_type'               => $outputFormat === 'wav' ? 'audio/wav' : 'audio/mpeg',
             'file_size'               => 0,
             'source'                  => 'ai_generated',
         ]);
@@ -1202,9 +1290,12 @@ class VideoEditorAiController extends Controller
         ]);
     }
 
-    private function generateMusicWithElevenlabs(Request $request): array
+    private function generateMusicWithElevenlabs(Request $request, string $model): array
     {
         $prompt = (string) $request->input('prompt', '');
+        $prompt .= $request->boolean('instrumental', true)
+            ? "\n\nInstrumental music only. Do not include vocals or spoken words."
+            : "\n\nInclude vocals where appropriate.";
 
         if ($request->filled('style')) {
             $prompt .= ', in the style of ' . $request->input('style');
@@ -1212,7 +1303,7 @@ class VideoEditorAiController extends Controller
 
         $param = [
             'prompt'   => $prompt,
-            'model_id' => 'music_v1',
+            'model_id' => $model,
         ];
 
         if ($request->filled('duration')) {
@@ -1242,6 +1333,10 @@ class VideoEditorAiController extends Controller
     {
         $prompt = (string) $request->input('prompt', '');
 
+        $prompt .= $request->boolean('instrumental', true)
+            ? "\n\nInstrumental music only. Do not include vocals or spoken words."
+            : "\n\nInclude vocals where appropriate; follow any provided lyrics.";
+
         if ($request->filled('style')) {
             $prompt .= ', in the style of ' . $request->input('style');
         }
@@ -1251,14 +1346,81 @@ class VideoEditorAiController extends Controller
         }
 
         $images = $request->file('images', []);
+        $videoFrame = $this->extractMusicFrameFromVideo($request);
+        if ($videoFrame) {
+            $images[] = $videoFrame;
+        }
         $outputFormat = $request->input('output_format', 'mp3');
 
-        $service = new LyriaMusicService;
-        $result = $service->generate($model, $prompt, $images, $outputFormat);
+        try {
+            $service = new LyriaMusicService;
+            $result = $service->generate($model, $prompt, $images, $outputFormat);
+        } finally {
+            if ($videoFrame && is_file($videoFrame->getRealPath())) {
+                @unlink($videoFrame->getRealPath());
+            }
+        }
 
         // LyriaMusicService returns ['file_url' => ..., 'duration' => minutes, ...]
         $result['duration_seconds'] = ($result['duration'] ?? 0) * 60;
 
         return $result;
+    }
+
+    private function extractMusicFrameFromVideo(Request $request): ?UploadedFile
+    {
+        $video = $request->file('video');
+        if (! $video) {
+            return null;
+        }
+
+        $ffmpegPath = config('video-editor.ffmpeg_path', '/usr/bin/ffmpeg');
+        if (! is_file($ffmpegPath)) {
+            throw new RuntimeException(__('Video reference processing is unavailable because FFmpeg is not configured.'));
+        }
+
+        $framePath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'garad-music-ref-' . Str::random(24) . '.jpg';
+        $command = sprintf(
+            '%s -ss 00:00:00 -i %s -frames:v 1 -vf "scale=1024:-1" -y %s 2>&1',
+            escapeshellarg($ffmpegPath),
+            escapeshellarg($video->getRealPath()),
+            escapeshellarg($framePath)
+        );
+        exec($command, $output, $returnCode);
+
+        if ($returnCode !== 0 || ! is_file($framePath)) {
+            if (is_file($framePath)) {
+                @unlink($framePath);
+            }
+            throw new RuntimeException(__('Could not extract a reference image from the uploaded video.'));
+        }
+
+        return new UploadedFile($framePath, 'video-reference.jpg', 'image/jpeg', null, true);
+    }
+
+    private function isMusicProviderConfigured(string $provider): bool
+    {
+        if ($provider === 'elevenlabs') {
+            $key = trim((string) ApiHelper::setElevenlabsKey());
+
+            return $key !== '' && $key !== 'empty';
+        }
+
+        if (in_array($provider, ['lyria3clip', 'lyria3pro'], true)) {
+            $settings = Setting::getCache();
+            $user = Auth::user();
+            $usesUserKeys = (bool) $settings?->user_api_option || (bool) $user?->relationPlan?->user_api;
+            $keys = $usesUserKeys
+                ? (string) ($user?->gemini_api_keys ?? '')
+                : (string) setting('gemini_api_secret', '');
+
+            foreach (explode(',', $keys) as $key) {
+                if (trim($key) !== '' && trim($key) !== 'empty') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

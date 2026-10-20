@@ -173,25 +173,18 @@ class OutlookConnectorDefinition implements ConnectorDefinition
     {
         $options = [];
 
-        try {
-            $client = $this->clientFactory->make($connector);
-            $response = $client->get('/me/mailFolders', [
-                '$top'    => 50,
-                '$select' => 'id,displayName,totalItemCount',
-            ]);
+        $client = $this->clientFactory->make($connector);
+        $response = $client->get('/me/mailFolders', [
+            '$top'    => 50,
+            '$select' => 'id,displayName,totalItemCount',
+        ]);
 
-            foreach ((array) data_get($response->json(), 'value', []) as $folder) {
-                $options[] = [
-                    'id'   => (string) data_get($folder, 'id', ''),
-                    'name' => (string) data_get($folder, 'displayName', ''),
-                    'meta' => (string) data_get($folder, 'totalItemCount', ''),
-                ];
-            }
-        } catch (Throwable $exception) {
-            Log::warning('[connectors] Outlook accessOptions failed', [
-                'connector_id' => $connector->id,
-                'message'      => $exception->getMessage(),
-            ]);
+        foreach ((array) data_get($response->json(), 'value', []) as $folder) {
+            $options[] = [
+                'id'   => (string) data_get($folder, 'id', ''),
+                'name' => (string) data_get($folder, 'displayName', ''),
+                'meta' => (string) data_get($folder, 'totalItemCount', ''),
+            ];
         }
 
         return [

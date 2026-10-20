@@ -20,6 +20,7 @@ use App\Extensions\AzureOpenai\System\Services\AzureOpenaiService;
 use App\Extensions\OpenRouter\System\Services\RouterAiService;
 use App\Extensions\SocialMediaAgent\System\Services\Chat\SocialMediaAgentChatService;
 use App\Helpers\Classes\ApiHelper;
+use App\Helpers\Classes\ChatAttachmentReferences;
 use App\Helpers\Classes\Helper;
 use App\Helpers\Classes\MarketplaceHelper;
 use App\Helpers\Classes\OpenAiParamHelper;
@@ -34,6 +35,8 @@ use App\Services\Bedrock\BedrockRuntimeService;
 use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -55,6 +58,8 @@ use PhpOffice\PhpWord\IOFactory;
 
 class StreamService
 {
+    private const MAX_ANTHROPIC_CONTINUATIONS = 4;
+
     public bool $guest = false;
 
     private string $tempChatSessionKey = 'temp_chat_history_';
@@ -133,6 +138,153 @@ class StreamService
         if (function_exists('flush')) {
             @flush();
         }
+    }
+
+    private function takeAgentPendingApprovalId(): ?string
+    {
+        $attributes = request()->attributes;
+        $approvalId = $attributes->get('garad_agent_pending_approval_id');
+        $attributes->remove('garad_agent_pending_approval_id');
+
+        return is_string($approvalId) ? $approvalId : null;
+    }
+
+    private function continueAnthropicTextResponse(
+        AnthropicService $client,
+        ?string $system,
+        array $messages,
+        bool $usedTools,
+        ?string &$stopReason,
+        string &$responseText,
+        string &$output,
+        int &$totalUsedTokens,
+    ): bool {
+        if ($stopReason !== 'max_tokens') {
+            return true;
+        }
+
+        if ($usedTools) {
+            return $this->reportIncompleteAnthropicResponse('The response stopped while using a tool.');
+        }
+
+        if (function_exists('set_time_limit')) {
+            set_time_limit(0);
+        }
+
+        $continuationMessages = $messages;
+        $continuationMessages[] = ['role' => 'assistant', 'content' => $responseText];
+        $continuationPrompt = 'Continue the response from exactly where it stopped. Do not repeat any text already written. Finish all remaining sections and include a clear conclusion.';
+        $continuationCount = 0;
+
+        while ($stopReason === 'max_tokens' && $continuationCount < self::MAX_ANTHROPIC_CONTINUATIONS) {
+            $request = request();
+            if ($request?->attributes->has('garad_provider_request_max')) {
+                $maximumRequests = min(
+                    \App\Services\Ai\ProviderRequestBudgetService::MAX_PROVIDER_REQUESTS,
+                    (int) $request->attributes->get('garad_provider_request_max'),
+                );
+                if ((int) $request->attributes->get('garad_provider_request_count', 0) >= $maximumRequests) {
+                    return $this->reportIncompleteAnthropicResponse('The provider-request safety budget is exhausted.');
+                }
+            }
+
+            echo "event: progress\n";
+            echo 'data: ' . json_encode(['message' => 'Continuing the response after the output limit…'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+            $this->safeFlush();
+
+            $continuationMessages[] = ['role' => 'user', 'content' => $continuationPrompt];
+            $eventTypes = [];
+            $providerError = null;
+            $continuationStopReason = null;
+            $segment = '';
+
+            foreach ($this->anthropicStreamLines($client->setStream(true)
+                ->setSystem($system)
+                ->setTools([])
+                ->setToolChoice(null)
+                ->setMessages($continuationMessages)
+                ->stream()) as $chunk) {
+                if (strlen($chunk) < 6 || ! Str::contains($chunk, 'data: ')) {
+                    continue;
+                }
+
+                $chunk = str_replace('data: {', '{', $chunk);
+                $jsonData = json_decode($chunk, false, 512, JSON_THROW_ON_ERROR);
+                $eventType = (string) ($jsonData->type ?? 'unknown');
+                $eventTypes[$eventType] = ($eventTypes[$eventType] ?? 0) + 1;
+
+                if ($eventType === 'error') {
+                    $providerError = $jsonData->error->message ?? 'The provider returned an error event.';
+                } elseif ($eventType === 'message_delta') {
+                    $continuationStopReason = $jsonData->delta->stop_reason ?? null;
+                } elseif (isset($jsonData->delta->text)) {
+                    $text = (string) $jsonData->delta->text;
+                    $segment .= $text;
+                    $responseText .= $text;
+                    $messageFix = str_replace(["\r\n", "\r", "\n"], '<br/>', $text);
+                    $output .= $messageFix;
+                    $totalUsedTokens += countWords($text);
+                    $this->emitStreamChunk($messageFix);
+                }
+
+                if (connection_aborted()) {
+                    return true;
+                }
+            }
+
+            if ($providerError !== null) {
+                Log::warning('Anthropic continuation stream returned an error', [
+                    'message' => $providerError,
+                    'stream_events' => $eventTypes,
+                ]);
+
+                return $this->reportIncompleteAnthropicResponse('The provider could not continue the response.');
+            }
+
+            if (! isset($eventTypes['message_stop'])) {
+                Log::warning('Anthropic continuation stream ended before completion', [
+                    'stream_events' => $eventTypes,
+                    'stop_reason' => $continuationStopReason,
+                    'response_chars' => strlen($responseText),
+                ]);
+
+                return $this->reportIncompleteAnthropicResponse('The provider ended the continuation before completing it.');
+            }
+
+            $stopReason = is_string($continuationStopReason) ? $continuationStopReason : null;
+            $continuationCount++;
+
+            if ($stopReason === 'max_tokens') {
+                if ($segment === '') {
+                    return $this->reportIncompleteAnthropicResponse('The provider reached its output limit without producing more text.');
+                }
+
+                $continuationMessages[] = ['role' => 'assistant', 'content' => $segment];
+            }
+        }
+
+        if ($stopReason === 'max_tokens') {
+            return $this->reportIncompleteAnthropicResponse('The response is still incomplete after multiple continuation attempts.');
+        }
+
+        return true;
+    }
+
+    private function reportIncompleteAnthropicResponse(string $detail): bool
+    {
+        Log::warning('Anthropic response remained incomplete after continuation', ['detail' => $detail]);
+
+        echo "event: error\n";
+        echo 'data: ' . json_encode([
+            'type' => 'error',
+            'message' => $detail . ' Please ask the agent to continue or shorten the task.',
+            'code' => 'response_incomplete',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+        echo "event: stop\n";
+        echo "data: [DONE]\n\n";
+        $this->safeFlush();
+
+        return false;
     }
 
     /**
@@ -340,6 +492,9 @@ class StreamService
         $contain_images = $chatParams['contain_images'];
         $assistant = $chatParams['assistant'];
         $openRouter = $chatParams['openRouter'];
+        if ($chat_type === 'chatPro') {
+            request()?->attributes->set('garad_selected_model', $chat_bot);
+        }
 
         // Initialize skill tracking
         $this->autoSkills = collect($chatParams['auto_skills'] ?? []);
@@ -401,6 +556,17 @@ class StreamService
         if (! $ai_engine) {
             $ai_engine = setting('default_ai_engine', EngineEnum::OPEN_AI->value);
         }
+        if ($chat_type === 'chatPro') {
+            request()?->attributes->set(
+                'garad_selected_engine',
+                $ai_engine instanceof EngineEnum ? $ai_engine->value : (string) $ai_engine,
+            );
+
+            if (AiChatProService::requiresWebSearchForPrompt((string) ($main_message->input ?? ''))
+                && setting('default_realtime') === 'tool_calling') {
+                request()?->merge(['realtime' => 1]);
+            }
+        }
 
         $this->isFirstMessage = ! empty($chatParams['is_first_message']) && ! $this->tempChatActive && ! $this->guest;
 
@@ -431,7 +597,11 @@ class StreamService
         // Inject smart image system prompt when feature is enabled (OpenAI and Gemini)
         if ($chat_type === 'chatPro'
             && ! $isCouncilSubRequest
-            && in_array($ai_engine, [EngineEnum::OPEN_AI->value, EngineEnum::GEMINI->value], true)
+            && in_array($ai_engine, [
+                EngineEnum::OPEN_AI->value,
+                EngineEnum::GEMINI->value,
+                EngineEnum::ANTHROPIC->value,
+            ], true)
             && MarketplaceHelper::isRegistered('ai-chat-pro-smart-image')
             && SmartImageService::isEnabled()) {
             $history = $this->injectSmartImageInstruction($history);
@@ -464,32 +634,81 @@ class StreamService
         }
 
         if ($chat_type === 'chatPro' && MarketplaceHelper::isRegistered('ai-chat-pro')) {
+            // GARAD_SAFE_V4_SYSTEM_INSTRUCTION_START
+            $garadSafeV4Selection = strtolower(trim((string) request()?->input('garad_selected_tool', '')));
+            $garadSafeV4Selected = match ($garadSafeV4Selection) {
+                'image' => 'generate_image',
+                'video' => 'generate_video',
+                'pdf' => 'create_pdf',
+                'word', 'docx' => 'create_docx',
+                'excel', 'xlsx' => 'create_xlsx',
+                'slides', 'presentation', 'ppt', 'pptx' => 'create_presentation',
+                default => null,
+            };
+            $garadSafeV4Instruction = method_exists(AiChatProService::class, 'systemInstruction')
+                ? AiChatProService::systemInstruction()
+                : 'Use the available Chat Pro tools whenever the user explicitly asks to create the corresponding file or media.';
+            if ($garadSafeV4Selected) {
+                $garadSafeV4Instruction .= "\n\nThe user explicitly selected the create tool `{$garadSafeV4Selected}`. If that tool is available, you MUST use it for this request rather than only writing instructions or an outline.";
+            }
+            $history[] = ['role' => 'system', 'content' => $garadSafeV4Instruction];
+            // GARAD_SAFE_V4_SYSTEM_INSTRUCTION_END
             if (! auth()->check()) {
                 $this->guest = true;
             }
 
-            $pass = false;
-            if (MarketplaceHelper::isRegistered('ai-chat-pro-file-chat') && ((int) setting('chatpro_file_chat_allowed', 1) === 1)) {
+            $fileSearchTools = [];
+            $hasGaradAssets = false;
+
+            if ($ai_engine === EngineEnum::OPEN_AI->value) {
+                try {
+                    $hasGaradAssets = app(\App\Extensions\AIChatPro\System\Services\GaradMultimodalService::class)
+                        ->hasConversationAssets((int) request()?->input('chat_id'));
+                } catch (Throwable $e) {
+                    Log::warning('Unable to inspect Chat Pro multimodal assets', [
+                        'chat_id' => request()?->input('chat_id'),
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // New Garad multimodal documents are already injected into chat history.
+            // Keep the legacy OpenAI File Search path only as a fallback for older chats.
+            if ($ai_engine === EngineEnum::OPEN_AI->value
+                && ! $hasGaradAssets
+                && MarketplaceHelper::isRegistered('ai-chat-pro-file-chat')
+                && ((int) setting('chatpro_file_chat_allowed', 1) === 1)) {
                 $service = new AIFileChatService(
-                    request()?->input('pdfpath'),
+                    ChatAttachmentReferences::normalize(request()?->input('pdfpath')),
                     request()?->input('chat_id')
                 );
 
                 $fileChat = $service->validateAndAnalyzeFile();
                 if ($fileChat) {
                     $contain_images = false;
-                    $pass = true;
+                    $chat = UserOpenaiChat::query()->find((int) request()?->input('chat_id'));
+
+                    if ($chat?->openai_vector_id) {
+                        $fileSearchTools[] = [
+                            'type'             => 'file_search',
+                            'vector_store_ids' => [$chat->openai_vector_id],
+                            'max_num_results'  => 5,
+                        ];
+                    }
                 }
+            } else {
+                $fileChat = false;
             }
 
-            $hasImageGeneration = ! $isCouncilSubRequest
-                && (bool) setting('ai_chat_pro_image_generation_feature', '0');
-            $hasSmartImage = ! $isCouncilSubRequest
-                && MarketplaceHelper::isRegistered('ai-chat-pro-smart-image')
-                && SmartImageService::isEnabled();
-
-            if (! $pass && $ai_engine === EngineEnum::OPEN_AI->value && ($hasImageGeneration || $hasSmartImage)) {
-                $mergedTools = array_merge(AiChatProService::tools(), $earlySkillTools);
+            // Chat Pro is now a unified tool surface. Tools are not conditional on
+            // image-generation settings; AiChatProService itself decides which
+            // capabilities are currently available to this user/install.
+            if ($ai_engine === EngineEnum::OPEN_AI->value) {
+                $mergedTools = array_merge(
+                    AiChatProService::toolsForPrompt((string) ($main_message->input ?? '')),
+                    $earlySkillTools,
+                    $fileSearchTools,
+                );
 
                 return $this->openaiChatStream($chat_bot, $history, $main_message, $chat_type, $contain_images, tools: $mergedTools);
             }
@@ -509,12 +728,12 @@ class StreamService
             return $this->openaiFileChat($chat_bot, $history, $main_message, $chat_type, $contain_images);
         }
 
-        if (! is_null($assistant)) {
+        // Chat Pro is model-driven and must never use the legacy Assistants Threads API.
+        if (! is_null($assistant) && $chat_type !== 'chatPro' && $ai_engine === EngineEnum::OPEN_AI->value) {
             return $this->assistantStream($chat_bot, $history, $main_message, $assistant);
         }
-
         if (! is_null($openRouter) && setting('open_router_status') == 1) {
-            return $this->openRouterChatStream($chat_bot, $history, $main_message, $contain_images, $openRouter);
+            return $this->guardProviderStream($this->openRouterChatStream($chat_bot, $history, $main_message, $contain_images, $openRouter), 'openrouter', (string) $openRouter);
         }
 
         // Build skill tools for auto-use skills if any exist
@@ -553,7 +772,12 @@ class StreamService
             }
         }
 
-        return match ($ai_engine) {
+        if ($chat_type === 'chatPro') {
+            $history = app(\App\Services\Ai\ProviderRequestBudgetService::class)
+                ->fitHistoryToContextWindow($history, (string) $chat_bot);
+        }
+
+        $streamResponse = match ($ai_engine) {
             EngineEnum::OPEN_AI->value   => $this->openaiChatStream($chat_bot, $history, $main_message, $chat_type, $contain_images, tools: ! empty($skillTools) ? $skillTools : []),
             EngineEnum::ANTHROPIC->value => $this->anthropicChatStream($chat_bot, $history, $main_message, $chat_type, $contain_images),
             EngineEnum::GEMINI->value    => $this->geminiChatStream($chat_bot, $history, $main_message, $chat_type, $contain_images),
@@ -561,19 +785,190 @@ class StreamService
             EngineEnum::X_AI->value      => $this->xAiChatStream($chat_bot, $history, $main_message, $chat_type, $contain_images),
             default                      => throw new Exception('Invalid AI Engine'),
         };
+
+        return $chat_type === 'chatPro'
+            ? $this->guardProviderStream($streamResponse, (string) $ai_engine, (string) $chat_bot)
+            : $streamResponse;
+    }
+
+    /**
+     * Provider-independent safety net for every Chat Pro stream: an exception thrown after
+     * streaming started is logged with its provider details and surfaced as an explicit SSE error
+     * instead of silently ending the stream.
+     */
+    private function guardProviderStream(?StreamedResponse $response, string $engine, string $model): ?StreamedResponse
+    {
+        $callback = $response?->getCallback();
+        if ($callback === null) {
+            return $response;
+        }
+
+        $response->setCallback(function () use ($callback, $engine, $model) {
+            try {
+                return $callback();
+            } catch (Throwable $e) {
+                $this->emitProviderStreamFailure($e, $engine, $model);
+
+                return null;
+            }
+        });
+
+        return $response;
+    }
+
+    /**
+     * Document-creation tool call for providers that use OpenAI Chat Completions function calling
+     * (DeepSeek, OpenRouter). The selected model decides the document content; the shared artifact
+     * pipeline (grounding, review, rendering, persistence) is then applied unchanged.
+     * Returns true when the request was handled here (artifact flow), false for ordinary chat.
+     */
+    private function runChatCompletionsArtifactTool(
+        string $label,
+        string $url,
+        array $headers,
+        string $model,
+        array $history,
+        $main_message,
+        $chat,
+        $driver,
+        string &$responsedText,
+        string &$output,
+        int &$total_used_tokens,
+    ): bool {
+        $prompt = (string) ($main_message->input ?? '');
+        $requestedTool = Auth::check() ? AiChatProService::requestedDocumentTool($prompt) : null;
+        $tools = $requestedTool ? AiChatProService::chatCompletionsTools($prompt) : [];
+        if ($requestedTool === null || $tools === []) {
+            return false;
+        }
+
+        echo "event: progress\n";
+        echo 'data: ' . json_encode(['message' => "Sending request to {$label}…"], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+        $this->safeFlush();
+
+        $response = \Illuminate\Support\Facades\Http::withHeaders($headers)
+            ->connectTimeout(15)
+            ->timeout(300)
+            ->post($url, [
+                'model' => $model,
+                'messages' => array_values($history),
+                'tools' => $tools,
+                'tool_choice' => 'auto',
+                'stream' => false,
+            ]);
+        if ($response->failed()) {
+            Log::error('Chat Completions artifact request was rejected', [
+                'provider' => $label,
+                'model' => $model,
+                'status' => $response->status(),
+                'provider_error' => $response->json('error.message') ?? $response->json('error'),
+            ]);
+        }
+        $response->throw();
+
+        $toolCall = null;
+        foreach ((array) $response->json('choices.0.message.tool_calls', []) as $candidate) {
+            if (($candidate['function']['name'] ?? null) === $requestedTool) {
+                $toolCall = $candidate['function'];
+                break;
+            }
+        }
+
+        if ($toolCall === null) {
+            Log::warning('Selected model did not call the requested document tool', [
+                'provider' => $label,
+                'model' => $model,
+                'requested_tool' => $requestedTool,
+                'finish_reason' => $response->json('choices.0.finish_reason'),
+            ]);
+            $fallback = "The selected model ({$model}) did not produce the requested file, and no file was created. Please retry or choose another model.";
+            $responsedText = $fallback;
+            $output = $fallback;
+            $total_used_tokens = countWords($fallback);
+            echo PHP_EOL . "event: data\ndata: " . $fallback . "\n\n";
+            $this->safeFlush();
+            $this->saveStreamResponse($main_message, $chat, $responsedText, $output, $total_used_tokens, $driver);
+
+            return true;
+        }
+
+        echo PHP_EOL;
+        echo "event: tool_status\n";
+        echo 'data: ' . json_encode(AiChatProService::progressPayload($requestedTool, 'working'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+        $this->safeFlush();
+
+        $functionResponse = AiChatProService::callFunction($requestedTool, (string) ($toolCall['arguments'] ?? '{}'))
+            ?? 'The requested action could not be completed. The capability did not return a result.';
+        $toolState = str_starts_with($functionResponse, 'The requested action could not be completed.') ? 'failed' : 'completed';
+
+        echo PHP_EOL;
+        echo "event: tool_status\n";
+        echo 'data: ' . json_encode(AiChatProService::progressPayload($requestedTool, $toolState), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+        $this->safeFlush();
+
+        if ($this->stopAfterFailedArtifactTool($requestedTool, $toolState, $main_message, $chat, $responsedText, $output, $total_used_tokens, $driver)) {
+            return true;
+        }
+        $this->emitCreatedArtifactEvent();
+
+        $responsedText .= $functionResponse;
+        $output .= str_replace(["\r\n", "\r", "\n"], '<br/>', $functionResponse);
+        $total_used_tokens += countWords($functionResponse);
+        echo PHP_EOL . "event: data\ndata: " . str_replace(["\r\n", "\r", "\n"], '<br/>', $functionResponse) . "\n\n";
+        $this->safeFlush();
+        $this->saveStreamResponse($main_message, $chat, $responsedText, $output, $total_used_tokens, $driver);
+
+        return true;
+    }
+
+    private function emitProviderStreamFailure(Throwable $e, string $engine, string $model): void
+    {
+        $detail = $e->getMessage();
+        $status = 502;
+        if ($e instanceof \Illuminate\Http\Client\RequestException) {
+            $providerMessage = $e->response->json('error.message') ?? $e->response->json('error.type');
+            $detail = is_string($providerMessage) && $providerMessage !== '' ? $providerMessage : $detail;
+            $status = $e->response->status();
+        } elseif ($e instanceof \Illuminate\Http\Client\ConnectionException) {
+            $detail = 'The provider connection timed out or was interrupted.';
+        }
+
+        Log::error('Chat Pro provider stream failed', [
+            'engine' => $engine,
+            'model' => $model,
+            'status' => $status,
+            'detail' => $detail,
+            'exception' => $e,
+        ]);
+
+        echo PHP_EOL;
+        echo "event: error\n";
+        echo 'data: ' . json_encode([
+            'type' => 'error',
+            'message' => "The selected model ({$model}) did not finish the response: {$detail}",
+            'code' => 'provider_stream_failed',
+            'status' => $status,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n\n";
+        echo "event: stop\n";
+        echo "data: [DONE]\n\n";
+        $this->safeFlush();
     }
 
     private function openRouterChatStream($chat_bot, $history, $main_message, $contain_images, $openRouter)
     {
+        if ($contain_images) {
+            return $this->streamInputError(
+                $main_message,
+                __('The selected OpenRouter model cannot process image attachments through its configured provider. Choose a vision-capable model.'),
+                'model_image_unsupported'
+            );
+        }
+
         $total_used_tokens = 0;
         $output = '';
         $responsedText = '';
 
-        if ($contain_images) {
-            $driver = $this->createDriver(EntityEnum::GPT_5_MINI);
-        } else {
-            $driver = $this->createDriver(EntityEnum::fromSlug($openRouter));
-        }
+        $driver = $this->createDriver(EntityEnum::fromSlug($openRouter));
 
         $this->prepareStreamEnvironment();
 
@@ -600,21 +995,41 @@ class StreamService
             }
 
             if (! $contain_images) {
-                $historyMessages = array_filter($history, function ($item) {
-                    return $item['role'] != 'system';
-                });
+                if ($this->runChatCompletionsArtifactTool(
+                    'OpenRouter',
+                    RouterAiService::BASE_URL,
+                    (new RouterAiService)->headers() + ['Content-Type' => 'application/json'],
+                    (string) RouterAiService::resolveModel((string) $openRouter),
+                    $history,
+                    $main_message,
+                    $chat,
+                    $driver,
+                    $responsedText,
+                    $output,
+                    $total_used_tokens,
+                )) {
+                    return null;
+                }
 
                 $service = new RouterAiService;
-                $response = $service->response(last($historyMessages)['content'], $openRouter);
+                $response = $service->responseWithHistory($history, (string) $openRouter);
+                $finished = false;
 
                 foreach (explode("\n", $response) as $line) {
                     if (str_starts_with($line, 'data:')) {
                         $data = trim(substr($line, 5));
                         if ($data === '[DONE]') {
+                            $finished = true;
                             break;
                         }
 
                         $json = json_decode($data, true);
+                        if (isset($json['error'])) {
+                            throw new \RuntimeException('OpenRouter stream error: ' . json_encode($json['error'], JSON_UNESCAPED_UNICODE));
+                        }
+                        if (! empty($json['choices'][0]['finish_reason'])) {
+                            $finished = true;
+                        }
 
                         if (isset($json['choices'][0]['delta']['content'])) {
                             $content = $json['choices'][0]['delta']['content'];
@@ -633,6 +1048,10 @@ class StreamService
                             }
                         }
                     }
+                }
+
+                if (! $finished && ! connection_aborted()) {
+                    throw new \RuntimeException('OpenRouter stream ended before the model finished.');
                 }
             } else {
                 ApiHelper::setOpenAiKey();
@@ -699,6 +1118,14 @@ class StreamService
 
     private function deepseekChatStream($chat_bot, $history, $main_message, $contain_images): StreamedResponse
     {
+        if ($contain_images) {
+            return $this->streamInputError(
+                $main_message,
+                __('The selected DeepSeek model cannot process image attachments. Choose a vision-capable model.'),
+                'model_image_unsupported'
+            );
+        }
+
         ini_set('max_execution_time', 440);
         set_time_limit(0);
 
@@ -707,11 +1134,7 @@ class StreamService
         $output = '';
         $responsedText = '';
 
-        if ($contain_images) {
-            $driver = $this->createDriver(EntityEnum::GPT_5_MINI);
-        } else {
-            $driver = $this->createDriver(EntityEnum::fromSlug($chat_bot));
-        }
+        $driver = $this->createDriver(EntityEnum::fromSlug($chat_bot));
         $this->prepareStreamEnvironment();
 
         return response()->stream(
@@ -740,6 +1163,21 @@ class StreamService
                     ApiHelper::setDeepseekKey();
                     $url = 'https://api.deepseek.com/chat/completions';
                     $apikey = config('deepseek.api_key');
+                    if ($this->runChatCompletionsArtifactTool(
+                        'DeepSeek',
+                        $url,
+                        ['Content-Type' => 'application/json', 'Accept' => 'application/json', 'Authorization' => 'Bearer ' . $apikey],
+                        (string) $chat_bot,
+                        $history,
+                        $main_message,
+                        $chat,
+                        $driver,
+                        $responsedText,
+                        $output,
+                        $total_used_tokens,
+                    )) {
+                        return null;
+                    }
                     $headers = [
                         'Content-Type'  => 'application/json',
                         'Accept'        => 'application/json',
@@ -749,7 +1187,7 @@ class StreamService
                     $body = [
                         'messages'          => $history,
                         'model'             => $chat_bot,
-                        'max_tokens'        => (int) setting('deepseek_max_output_length', 200),
+                        'max_tokens'        => max(8000, (int) setting('deepseek_max_output_length', 8000)),
                         'response_format'   => [
                             'type' => 'text',
                         ],
@@ -763,6 +1201,9 @@ class StreamService
                         'logprobs'       => false,
                         'top_logprobs'   => null,
                     ];
+                    $requestBudget = app(\App\Services\Ai\ProviderRequestBudgetService::class);
+                    $body = $requestBudget->preparePayload($body);
+                    $requestBudget->recordProviderRequest();
                     $response = $client->post($url, [
                         'headers' => $headers,
                         'json'    => $body,
@@ -784,8 +1225,12 @@ class StreamService
                                     $decoded = json_decode($json, true);
                                     if (json_last_error() === JSON_ERROR_NONE) {
                                         $delta = $decoded['choices'][0]['delta'] ?? [];
-
-                                        // Handle reasoning content
+                                        if (! empty($decoded['choices'][0]['finish_reason'])) {
+                                            $deepseekFinished = true;
+                                        }
+                                        if (isset($decoded['error'])) {
+                                            throw new \RuntimeException('DeepSeek stream error: ' . json_encode($decoded['error'], JSON_UNESCAPED_UNICODE));
+                                        }
                                         if (isset($delta['reasoning_content']) && $delta['reasoning_content'] !== null) {
                                             // Add start signal if this is the first reasoning content
                                             if (! isset($reasoningStarted)) {
@@ -854,6 +1299,9 @@ class StreamService
                         }
                     }
 
+                    if (! ($deepseekFinished ?? false) && ! connection_aborted()) {
+                        throw new \RuntimeException('DeepSeek stream ended before the model finished (no finish_reason received).');
+                    }
                 } else {
                     ApiHelper::setOpenAiKey();
                     $chat_bot = EntityEnum::GPT_5_MINI->value;
@@ -972,7 +1420,7 @@ class StreamService
             $body = [
                 'messages'          => $history,
                 'model'             => $chat_bot,
-                'max_tokens'        => (int) setting('deepseek_max_output_length', 200),
+                'max_tokens'        => max(8000, (int) setting('deepseek_max_output_length', 8000)),
                 'response_format'   => [
                     'type' => 'text',
                 ],
@@ -1257,15 +1705,19 @@ class StreamService
      */
     private function xAiChatStream(string $chat_bot, $history, $main_message, $chat_type, $contain_images): ?StreamedResponse
     {
+        if ($contain_images) {
+            return $this->streamInputError(
+                $main_message,
+                __('The selected xAI model cannot process image attachments through its configured provider. Choose a vision-capable model.'),
+                'model_image_unsupported'
+            );
+        }
+
         $total_used_tokens = 0;
         $output = '';
         $responsedText = '';
 
-        if ($contain_images) {
-            $driver = $this->createDriver(EntityEnum::GPT_5_MINI);
-        } else {
-            $driver = $this->createDriver(EntityEnum::fromSlug($chat_bot));
-        }
+        $driver = $this->createDriver(EntityEnum::fromSlug($chat_bot));
         $this->prepareStreamEnvironment();
 
         return response()->stream(function () use ($driver, $history, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images) {
@@ -1472,9 +1924,16 @@ class StreamService
      */
     private function resolveReasoningEffort(EntityEnum $modelEnum): string
     {
-        return $modelEnum->resolveReasoningEffort(
-            setting('openai_reasoning_models_effort', 'low')
-        );
+        $requested = strtolower(trim((string) request()?->input('reasoning_level', '')));
+        $requested = match ($requested) {
+            'low' => 'low',
+            'medium' => 'medium',
+            'high' => 'high',
+            'max' => 'xhigh',
+            default => (string) setting('openai_reasoning_models_effort', 'medium'),
+        };
+
+        return $modelEnum->resolveReasoningEffort($requested);
     }
 
     /**
@@ -1504,6 +1963,32 @@ class StreamService
         $this->prepareStreamEnvironment();
 
         return response()->stream(function () use ($driver, $history, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images, $tools, $chat_type) {
+            try {
+                $this->runOpenaiChatStream($driver, $history, $total_used_tokens, $output, $responsedText, $main_message, $contain_images, $tools, $chat_type);
+            } catch (Throwable $e) {
+                Log::error('OpenAI chat stream failed: ' . $e->getMessage(), ['exception' => $e]);
+                echo "event: error\n";
+                echo 'data: ' . json_encode([
+                    'type'    => 'error',
+                    'message' => 'The model provider failed before the response completed: ' . $e->getMessage(),
+                    'code'    => 'provider_stream_failed',
+                    'status'  => 502,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n\n";
+                echo "event: stop\n";
+                echo "data: [DONE]\n\n";
+                $this->safeFlush();
+            }
+        }, 200, [
+            'Cache-Control'     => 'no-cache',
+            'X-Accel-Buffering' => 'no',
+            'Connection'        => 'keep-alive',
+            'Content-Type'      => 'text/event-stream',
+        ]);
+    }
+
+    private function runOpenaiChatStream($driver, $history, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images, $tools, $chat_type): void
+    {
+        $__unused = (function () use ($driver, $history, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images, $tools, $chat_type) {
 
             $chat_id = $main_message->user_openai_chat_id;
             $chat = UserOpenaiChat::whereId($chat_id)->first();
@@ -1547,6 +2032,7 @@ class StreamService
                 }
 
                 $options = OpenAiParamHelper::sanitizeChatParams($options);
+                $options = $this->prepareChatProProviderPayload($options);
                 $stream = OpenAI::chat()->createStreamed($options);
 
                 foreach ($stream as $response) {
@@ -1571,12 +2057,8 @@ class StreamService
                     'stream' => true,
                 ];
 
-                if ($contain_images) {
-                    $options['max_output_tokens'] = 2000;
-                    $options['model'] = EntityEnum::GPT_5_MINI->value;
-                }
-
-                // Extract system-role messages (skills, base prompt) into the
+                // The user's selected model is kept for image requests as well; every OpenAI model in
+                // the selector accepts image input, and a fixed output cap would starve reasoning models.
                 // Responses API `instructions` field so they get top-level priority.
                 $skillParts = [];
                 $otherSystemParts = [];
@@ -1594,12 +2076,63 @@ class StreamService
                     }
                 }
 
-                if (! empty($tools) && empty($skillParts)) {
-                    // Only pass tools when no manual skill is active — tools distract
-                    // the model from following skill instructions.
+                $preferredChatProTool = null;
+                if ($chat_type === 'chatPro') {
+                    $otherSystemParts[] = AiChatProService::systemInstruction();
+                    $preferredChatProTool = AiChatProService::preferredToolForPrompt((string) ($main_message->input ?? ''));
+                }
+
+                if (! empty($tools) && (empty($skillParts) || $preferredChatProTool)) {
+                    // Manual skills normally suppress auto tools, but an explicit Chat Pro
+                    // creation request must still be able to produce the requested file/media.
                     $options['tools'] = $tools;
                     $options['tool_choice'] = 'auto';
                     $argumentsString = '';
+
+                    // GARAD_SAFE_V4_FORCE_TOOL_START
+                    if ($chat_type === 'chatPro') {
+                        $garadSafeV4Selection = strtolower(trim((string) request()?->input('garad_selected_tool', '')));
+                        $garadSafeV4Tool = match ($garadSafeV4Selection) {
+                            'image' => 'generate_image',
+                            'video' => 'generate_video',
+                            'pdf' => 'create_pdf',
+                            'word', 'docx' => 'create_docx',
+                            'excel', 'xlsx' => 'create_xlsx',
+                            'slides', 'presentation', 'ppt', 'pptx' => 'create_presentation',
+                            default => null,
+                        };
+                        if (! $garadSafeV4Tool && method_exists(AiChatProService::class, 'preferredToolForPrompt')) {
+                            $garadSafeV4Tool = AiChatProService::preferredToolForPrompt((string) ($main_message->input ?? ''));
+                        }
+                        $garadSafeV4Available = false;
+                        if ($garadSafeV4Tool) {
+                            foreach ($tools as $garadSafeV4Definition) {
+                                if (($garadSafeV4Definition['type'] ?? null) === 'function'
+                                    && ($garadSafeV4Definition['name'] ?? null) === $garadSafeV4Tool) {
+                                    $garadSafeV4Available = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if ($garadSafeV4Available) {
+                            $options['tool_choice'] = [
+                                'type' => 'function',
+                                'name' => $garadSafeV4Tool,
+                            ];
+                        }
+                    }
+                    // GARAD_SAFE_V4_FORCE_TOOL_END
+
+                    // Explicit creation requests are deterministic. This prevents a
+                    // smaller/faster model from replying with copy-paste content instead
+                    // of creating the requested PDF/DOCX/XLSX/image/video/presentation.
+                    if ($preferredChatProTool
+                        && AiChatProService::toolIsAvailable($preferredChatProTool, $tools)) {
+                        $options['tool_choice'] = [
+                            'type' => 'function',
+                            'name' => $preferredChatProTool,
+                        ];
+                    }
 
                     if ($chat_type === 'chatPro' && SmartImageService::isEnabled()) {
                         $otherSystemParts[] = SmartImageService::systemPromptAddition();
@@ -1628,32 +2161,15 @@ class StreamService
                     $options['instructions'] = implode("\n\n---\n\n", $instructionParts);
                 }
                 
-                $documentContext = app(
-    \App\Extensions\AIChatPro\System\Services\GaradMultimodalService::class
-)->buildSystemContextMessage(
-    $chat_id,
-    $main_message->input,
-    null
-);
-
-if (! empty($documentContext)) {
-    $instructionParts[] = $documentContext;
-}
-
-
                 $options['input'] = $nonSystemHistory;
                 if ($driver->enum()->isReasoningModel()) {
                     $modelEnum = EntityEnum::fromSlug($options['model']);
-                    if (in_array($modelEnum, [EntityEnum::GPT_5_PRO, EntityEnum::GPT_5_2_PRO])) {
-                        $effort = setting('openai_reasoning_models_effort', 'high');
-                        $options['reasoning']['effort'] = in_array($effort, ['medium', 'high', 'xhigh']) ? $effort : 'high';
-                    } else {
-                        $options['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
-                    }
+                    $options['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
                 }
 
                 $options['temperature'] = 1.0;
 
+                $options = $this->prepareChatProProviderPayload($options);
                 $stream = OpenAI::responses()->createStreamed($options);
 
                 foreach ($stream as $response) {
@@ -1663,6 +2179,17 @@ if (! empty($documentContext)) {
 
                     if (connection_aborted()) {
                         break;
+                    }
+
+                    if (in_array($response->event, ['response.failed', 'response.incomplete', 'error'], true)) {
+                        $failedResponse = $response->response ?? null;
+                        $reason = $failedResponse->error->message
+                            ?? $failedResponse->incompleteDetails->reason
+                            ?? $failedResponse->incomplete_details->reason
+                            ?? $response->event;
+                        if ($response->event !== 'response.incomplete' || trim(strip_tags((string) $responsedText)) === '') {
+                            throw new \RuntimeException('OpenAI response did not finish: ' . $reason);
+                        }
                     }
 
                     if (! empty($tools) && $response->event === 'response.completed' && isset($response->response->output)) {
@@ -1679,7 +2206,6 @@ if (! empty($documentContext)) {
                                 $functionName = (string) ($call?->name ?? '');
                                 $argumentsString = $call?->arguments;
 
-                                // Connector tool calls: execute the connector, inject result, restream
                                 if (str_starts_with($functionName, 'connector_') && class_exists(ConnectorToolService::class)) {
                                     $connectorService = app(ConnectorToolService::class);
                                     $connectorArgs = json_decode($argumentsString ?: '{}', true) ?: [];
@@ -1733,14 +2259,10 @@ if (! empty($documentContext)) {
                                         'temperature'  => 1.0,
                                     ];
                                     if ($driver->enum()->isReasoningModel()) {
-                                        if (in_array($driver->enum(), [EntityEnum::GPT_5_PRO, EntityEnum::GPT_5_2_PRO])) {
-                                            $effort = setting('openai_reasoning_models_effort', 'high');
-                                            $connectorOptions['reasoning']['effort'] = in_array($effort, ['medium', 'high', 'xhigh']) ? $effort : 'high';
-                                        } else {
-                                            $connectorOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
-                                        }
+                                        $connectorOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
                                     }
 
+                                    $connectorOptions = $this->prepareChatProProviderPayload($connectorOptions);
                                     $connectorStream = OpenAI::responses()->createStreamed($connectorOptions);
 
                                     foreach ($connectorStream as $connectorResponse) {
@@ -1805,14 +2327,10 @@ if (! empty($documentContext)) {
                                             'temperature'  => 1.0,
                                         ];
                                         if ($driver->enum()->isReasoningModel()) {
-                                            if (in_array($driver->enum(), [EntityEnum::GPT_5_PRO, EntityEnum::GPT_5_2_PRO])) {
-                                                $effort = setting('openai_reasoning_models_effort', 'high');
-                                                $skillOptions['reasoning']['effort'] = in_array($effort, ['medium', 'high', 'xhigh']) ? $effort : 'high';
-                                            } else {
-                                                $skillOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
-                                            }
+                                            $skillOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
                                         }
 
+                                        $skillOptions = $this->prepareChatProProviderPayload($skillOptions);
                                         $skillStream = OpenAI::responses()->createStreamed($skillOptions);
 
                                         foreach ($skillStream as $skillResponse) {
@@ -1852,15 +2370,54 @@ if (! empty($documentContext)) {
                                         'chat_type'       => $chat_type,
                                     ];
                                 } else {
-                                    // Non-image tool calls: execute immediately
+                                    // Non-image tool calls: execute immediately. Chat Pro emits a visible
+                                    // status event before the potentially slow provider/file work starts.
                                     $functionResponse = null;
                                     if ($chat_type === 'chatPro') {
+                                        echo PHP_EOL;
+                                        echo "event: tool_status\n";
+                                        echo 'data: ' . json_encode(AiChatProService::progressPayload($functionName, 'working'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                                        $this->safeFlush();
+
                                         $functionResponse = AiChatProService::callFunction($functionName, $argumentsString);
                                     } elseif ($chat_type === 'socialMediaAgent') {
                                         $functionResponse = SocialMediaAgentChatService::callFunction($functionName, $argumentsString);
                                     }
 
                                     if (isset($functionResponse)) {
+                                        if ($chat_type === 'chatPro') {
+                                            $pendingApprovalId = $this->takeAgentPendingApprovalId();
+                                            $toolExecution = AiChatProService::toolExecutionPayload(
+                                                $functionName,
+                                                (string) $functionResponse,
+                                                request()->boolean('agent_mode'),
+                                                $pendingApprovalId,
+                                            );
+                                            $toolState = $toolExecution['state'];
+                                            $toolStatusPayload = AiChatProService::progressPayload($functionName, $toolState);
+                                            if (isset($toolExecution['approvalId'])) {
+                                                $toolStatusPayload['approvalId'] = $toolExecution['approvalId'];
+                                            }
+                                            echo PHP_EOL;
+                                            echo "event: tool_status\n";
+                                            echo 'data: ' . json_encode($toolStatusPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                                            $this->safeFlush();
+                                        }
+                                        if ($chat_type === 'chatPro' && $this->stopAfterFailedArtifactTool(
+                                            $functionName,
+                                            $toolState,
+                                            $main_message,
+                                            $chat,
+                                            $responsedText,
+                                            $output,
+                                            $total_used_tokens,
+                                            $driver,
+                                        )) {
+                                            return;
+                                        }
+                                        if ($chat_type === 'chatPro') {
+                                            $this->emitCreatedArtifactEvent();
+                                        }
                                         // When generating a social post, clear any AI conversational text
                                         // that was streamed before the tool call so only the post card shows.
                                         if ($functionName === 'generate_social_post') {
@@ -1872,13 +2429,30 @@ if (! empty($documentContext)) {
                                             $this->safeFlush();
                                         }
 
-                                        $output .= $functionResponse;
-                                        echo PHP_EOL;
-                                        echo "event: data\n";
-                                        echo 'data: ' . $functionResponse;
-                                        echo "\n\n";
-                                        $this->safeFlush();
-                                        $hasTextOutput = true;
+                                        if (AiChatProService::shouldExposeToolResult($functionName, $toolState)) {
+                                            // Keep tool responses valid inside SSE. Raw newlines break a single data payload.
+                                            $functionResponseForStream = str_replace(
+                                                ["\r\n", "\r", "\n"],
+                                                '<br/>',
+                                                $functionResponse
+                                            );
+
+                                            $output .= $functionResponseForStream;
+
+                                            echo PHP_EOL;
+                                            echo "event: data\n";
+                                            echo 'data: ' . $functionResponseForStream;
+                                            echo "\n\n";
+
+                                            $this->safeFlush();
+                                            $hasTextOutput = true;
+                                        }
+                                        if ($functionName === 'run_agent' && $toolState === 'failed') {
+                                            $this->saveStreamResponse($main_message, $chat, $responsedText, $output, $total_used_tokens, $driver);
+                                            $this->emitAgentExecutionError((string) $functionResponse);
+
+                                            return;
+                                        }
                                     }
                                 }
                             }
@@ -1919,14 +2493,10 @@ if (! empty($documentContext)) {
                                 $fallbackOptions['instructions'] = $baseInstructions;
                             }
                             if ($driver->enum()->isReasoningModel()) {
-                                if (in_array($driver->enum(), [EntityEnum::GPT_5_PRO, EntityEnum::GPT_5_2_PRO])) {
-                                    $effort = setting('openai_reasoning_models_effort', 'high');
-                                    $fallbackOptions['reasoning']['effort'] = in_array($effort, ['medium', 'high', 'xhigh']) ? $effort : 'high';
-                                } else {
-                                    $fallbackOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
-                                }
+                                $fallbackOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
                             }
 
+                            $fallbackOptions = $this->prepareChatProProviderPayload($fallbackOptions);
                             $fallbackStream = OpenAI::responses()->createStreamed($fallbackOptions);
 
                             foreach ($fallbackStream as $fallbackResponse) {
@@ -1961,12 +2531,7 @@ if (! empty($documentContext)) {
             }
 
             $this->saveStreamResponse($main_message, $chat, $responsedText, $output, $total_used_tokens, $driver);
-        }, 200, [
-            'Cache-Control'     => 'no-cache',
-            'X-Accel-Buffering' => 'no',
-            'Connection'        => 'keep-alive',
-            'Content-Type'      => 'text/event-stream',
-        ]);
+        })();
     }
 
     /**
@@ -2176,12 +2741,7 @@ if (! empty($documentContext)) {
 
             $reasoningOptions = [];
             if ($driver->enum()->isReasoningModel()) {
-                if (in_array($driver->enum(), [EntityEnum::GPT_5_PRO, EntityEnum::GPT_5_2_PRO])) {
-                    $effort = setting('openai_reasoning_models_effort', 'high');
-                    $reasoningOptions['reasoning']['effort'] = in_array($effort, ['medium', 'high', 'xhigh']) ? $effort : 'high';
-                } else {
-                    $reasoningOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
-                }
+                $reasoningOptions['reasoning']['effort'] = $this->resolveReasoningEffort($driver->enum());
             }
 
             $stream = OpenAI::responses()->createStreamed([
@@ -2225,6 +2785,232 @@ if (! empty($documentContext)) {
         ]);
     }
 
+    private function streamInputError($main_message, string $message, string $code): StreamedResponse
+    {
+        $messageId = $main_message->id;
+
+        return response()->stream(function () use ($messageId, $message, $code) {
+            echo "event: message\n";
+            echo 'data: ' . $messageId . "\n\n";
+            echo "event: error\n";
+            echo 'data: ' . json_encode([
+                'type' => 'error',
+                'message' => $message,
+                'code' => $code,
+                'status' => 422,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n\n";
+            echo "event: stop\n";
+            echo "data: [DONE]\n\n";
+            $this->safeFlush();
+        }, 200, [
+            'Cache-Control' => 'no-cache',
+            'X-Accel-Buffering' => 'no',
+            'Connection' => 'keep-alive',
+            'Content-Type' => 'text/event-stream',
+        ]);
+    }
+
+    private function prepareChatProProviderPayload(array $payload): array
+    {
+        if (request()?->attributes->has('garad_provider_request_max')) {
+            if (array_key_exists('messages', $payload)) {
+                $payload['max_tokens'] = min(
+                    \App\Services\Ai\ProviderRequestBudgetService::MAX_OUTPUT_TOKENS,
+                    max(1, (int) ($payload['max_tokens'] ?? \App\Services\Ai\ProviderRequestBudgetService::MAX_OUTPUT_TOKENS)),
+                );
+            } else {
+                $payload['max_output_tokens'] = min(
+                    \App\Services\Ai\ProviderRequestBudgetService::MAX_OUTPUT_TOKENS,
+                    max(1, (int) ($payload['max_output_tokens'] ?? \App\Services\Ai\ProviderRequestBudgetService::MAX_OUTPUT_TOKENS)),
+                );
+            }
+        }
+
+        $budget = app(\App\Services\Ai\ProviderRequestBudgetService::class);
+        $payload = $budget->preparePayload($payload);
+        $budget->recordProviderRequest();
+
+        return $payload;
+    }
+
+    private function emitAgentExecutionError(string $message): void
+    {
+        echo "event: error\n";
+        echo 'data: ' . json_encode([
+            'type' => 'error',
+            'message' => $message,
+            'code' => 'agent_execution_failed',
+            'status' => 500,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n\n";
+        $this->safeFlush();
+    }
+
+    private function stopAfterFailedArtifactTool(
+        string $functionName,
+        string $toolState,
+        $mainMessage,
+        $chat,
+        string &$responsedText,
+        string &$output,
+        int &$totalUsedTokens,
+        $driver,
+    ): bool {
+        $labels = [
+            'create_pdf' => 'PDF',
+            'create_docx' => 'Word document',
+            'create_xlsx' => 'spreadsheet',
+            'create_presentation' => 'presentation',
+            'generate_image' => 'image',
+            'generate_video' => 'video',
+        ];
+
+        if ($toolState !== 'failed' || ! isset($labels[$functionName])) {
+            return false;
+        }
+
+        AiChatProService::takeCreatedArtifactPayload();
+        $message = "I couldn't create the requested {$labels[$functionName]}. No file was created. Please retry.";
+        $responsedText = $message;
+        $output = $message;
+        $totalUsedTokens = countWords($message);
+
+        echo PHP_EOL;
+        echo "event: clear_content\n";
+        echo "data: \n\n";
+        echo "event: data\n";
+        echo 'data: ' . $message . "\n\n";
+        $this->safeFlush();
+
+        $this->saveStreamResponse(
+            $mainMessage,
+            $chat,
+            $responsedText,
+            $output,
+            $totalUsedTokens,
+            $driver,
+        );
+
+        echo "event: stop\n";
+        echo "data: [DONE]\n\n";
+        $this->safeFlush();
+
+        return true;
+    }
+
+    private function emitCreatedArtifactEvent(): void
+    {
+        $artifact = AiChatProService::takeCreatedArtifactPayload();
+        if ($artifact === null) {
+            return;
+        }
+
+        echo PHP_EOL;
+        echo "event: artifact\n";
+        echo 'data: ' . json_encode(
+            ['artifact' => $artifact],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+        ) . "\n\n";
+        $this->safeFlush();
+    }
+
+    private function anthropicMessagesWithImages(array $messages): array
+    {
+        return array_map(static function (array $message): array {
+            if (! is_array($message['content'] ?? null)) {
+                return $message;
+            }
+
+            $content = [];
+            foreach ($message['content'] as $part) {
+                if (! is_array($part)) {
+                    continue;
+                }
+
+                if (($part['type'] ?? null) === 'input_text') {
+                    $content[] = [
+                        'type' => 'text',
+                        'text' => (string) ($part['text'] ?? ''),
+                    ];
+
+                    continue;
+                }
+
+                if (($part['type'] ?? null) !== 'input_image') {
+                    $content[] = $part;
+
+                    continue;
+                }
+
+                $imageUrl = (string) ($part['image_url'] ?? '');
+                if (! preg_match('#^data:(image/(?:jpeg|png|gif|webp));base64,([A-Za-z0-9+/=]+)$#i', $imageUrl, $matches)) {
+                    throw new \InvalidArgumentException(__('The attached image format is not supported by the selected Anthropic model.'));
+                }
+
+                $content[] = [
+                    'type' => 'image',
+                    'source' => [
+                        'type' => 'base64',
+                        'media_type' => strtolower($matches[1]),
+                        'data' => $matches[2],
+                    ],
+                ];
+            }
+
+            return [...$message, 'content' => $content];
+        }, $messages);
+    }
+
+    /**
+     * Read Anthropic SSE data lines without buffering the provider's full response.
+     */
+    private function anthropicStreamLines(PromiseInterface|Response $response): \Generator
+    {
+        if ($response instanceof PromiseInterface) {
+            $response = $response->wait();
+        }
+
+        if ($response->failed()) {
+            Log::error('Anthropic stream request was rejected', [
+                'status' => $response->status(),
+                'provider_error_type' => $response->json('error.type'),
+                'provider_error_message' => $response->json('error.message'),
+            ]);
+        }
+        $response->throw();
+        $bodyStream = $response->toPsrResponse()->getBody();
+        $buffer = '';
+
+        while (! $bodyStream->eof()) {
+            if (connection_aborted()) {
+                $bodyStream->close();
+
+                return;
+            }
+
+            $buffer .= $bodyStream->read(1024);
+
+            while (($lineEnd = strpos($buffer, "\n")) !== false) {
+                $line = trim(substr($buffer, 0, $lineEnd));
+                $buffer = substr($buffer, $lineEnd + 1);
+
+                if (str_starts_with($line, 'data:')) {
+                    $data = trim(substr($line, 5));
+                    if ($data !== '' && $data !== '[DONE]') {
+                        yield 'data: ' . $data;
+                    }
+                }
+            }
+        }
+
+        $line = trim($buffer);
+        if (str_starts_with($line, 'data:')) {
+            $data = trim(substr($line, 5));
+            if ($data !== '' && $data !== '[DONE]') {
+                yield 'data: ' . $data;
+            }
+        }
+    }
+
     // AnthropicService Stream
     private function anthropicChatStream(string $chat_bot, $history, $main_message, $chat_type, $contain_images): ?StreamedResponse
     {
@@ -2232,16 +3018,35 @@ if (! empty($documentContext)) {
         $output = '';
         $responsedText = '';
         $client = app(AnthropicService::class);
+        $client->setModel($chat_bot);
         $driver = $this->createDriver(EntityEnum::fromSlug($chat_bot));
+
+        if ($chat_type === 'chatPro') {
+            try {
+                $history = $this->anthropicMessagesWithImages($history);
+            } catch (\InvalidArgumentException $e) {
+                return $this->streamInputError($main_message, $e->getMessage(), 'unsupported_image_format');
+            }
+        }
 
         $this->prepareStreamEnvironment();
 
-        return response()->stream(function () use ($driver, $client, $history, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images) {
+        return new StreamedResponse(function () use ($driver, $client, $history, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images, $chat_type) {
+            if (function_exists('ignore_user_abort')) {
+                ignore_user_abort(true);
+            }
+
             $chat_id = $main_message->user_openai_chat_id;
             $chat = UserOpenaiChat::whereId($chat_id)->first();
 
             echo "event: message\n";
             echo 'data: ' . $main_message->id . "\n\n";
+
+            if ($chat_type === 'chatPro') {
+                echo "event: progress\n";
+                echo 'data: ' . json_encode(['message' => 'Sending request to Claude…'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                $this->safeFlush();
+            }
 
             if (! $driver->hasCreditBalance()) {
                 echo PHP_EOL;
@@ -2257,7 +3062,7 @@ if (! empty($documentContext)) {
                 return null;
             }
 
-            if (! $contain_images) {
+            if (! $contain_images || $chat_type === 'chatPro') {
                 $historyMessages = array_filter($history, function ($item) {
                     return $item['role'] !== 'system';
                 });
@@ -2267,7 +3072,7 @@ if (! empty($documentContext)) {
                 );
                 $system = implode("\n\n", array_filter($systemParts)) ?: null;
 
-                if (setting('anthropic_default_model') === BedrockEngine::BEDROCK->value) {
+                if ($chat_type !== 'chatPro' && setting('anthropic_default_model') === BedrockEngine::BEDROCK->value) {
                     $bedrockService = new BedrockRuntimeService([
                         'region'      => config('filesystems.disks.s3.region'),
                         'version'     => 'latest',
@@ -2305,6 +3110,49 @@ if (! empty($documentContext)) {
                         $skillTools = SkillToolService::anthropicTools($this->autoSkills);
                     }
 
+                    $chatProTools = [];
+                    $preferredChatProTool = null;
+                    $chatProToolChoice = null;
+                    if ($chat_type === 'chatPro' && Auth::check()) {
+                        $preferredChatProTool = AiChatProService::preferredToolForPrompt((string) ($main_message->input ?? ''));
+                        $chatProTools = AiChatProService::toolsForPrompt((string) ($main_message->input ?? ''));
+                        $skillTools = array_merge(
+                            $skillTools,
+                            AiChatProService::anthropicTools((string) ($main_message->input ?? '')),
+                        );
+                        if ($preferredChatProTool
+                            && AiChatProService::toolIsAvailable($preferredChatProTool, $chatProTools)) {
+                            $chatProToolChoice = [
+                                'type' => 'tool',
+                                'name' => $preferredChatProTool,
+                            ];
+                        }
+
+                        if ($preferredChatProTool === 'search_images') {
+                            $imageQuery = SmartImageService::searchQueryFromPrompt((string) ($main_message->input ?? ''));
+                            if ($imageQuery !== '') {
+                                echo PHP_EOL;
+                                echo "event: smart_image_search\n";
+                                echo 'data: ' . json_encode([
+                                    'query' => $imageQuery,
+                                    'message_id' => $main_message->id ?? null,
+                                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                                $this->safeFlush();
+                            }
+
+                            $chatProTools = array_values(array_filter(
+                                $chatProTools,
+                                static fn (array $tool): bool => ($tool['name'] ?? null) !== 'search_images',
+                            ));
+                            $skillTools = array_values(array_filter(
+                                $skillTools,
+                                static fn (array $tool): bool => ($tool['name'] ?? null) !== 'search_images',
+                            ));
+                            $preferredChatProTool = null;
+                            $chatProToolChoice = null;
+                        }
+                    }
+
                     // Anthropic native web_search server tool when realtime + tool_calling.
                     // Uses the broad-compat 20250305 version (works on Claude 3+). Skip on
                     // Claude 2.x where the tool would 4xx.
@@ -2314,20 +3162,33 @@ if (! empty($documentContext)) {
                         $skillTools[] = [
                             'type' => 'web_search_20250305',
                             'name' => 'web_search',
+                            'max_uses' => 3,
                         ];
-                    }
 
-                    $data = $client->setStream(true)
-                        ->setSystem($system)
-                        ->setTools($skillTools)
-                        ->setMessages(array_values($historyMessages))
-                        ->stream()
-                        ->body();
+                        if ($chat_type === 'chatPro'
+                            && AiChatProService::requiresWebSearchForPrompt((string) ($main_message->input ?? ''))) {
+                            $skillTools[] = [
+                                'type' => 'web_fetch_20250910',
+                                'name' => 'web_fetch',
+                                'max_uses' => 3,
+                            ];
+                        }
+                    }
 
                     $toolUseBlock = null;
                     $toolUseInput = '';
+                    $anthropicEventTypes = [];
+                    $anthropicProviderError = null;
+                    $anthropicStopReason = null;
+                    $preferredToolCalled = false;
+                    $anthropicToolWasUsed = false;
 
-                    foreach (explode("\n", $data) as $chunk) {
+                    foreach ($this->anthropicStreamLines($client->setStream(true)
+                        ->setSystem($system)
+                        ->setTools($skillTools)
+                        ->setToolChoice($chatProToolChoice)
+                        ->setMessages(array_values($historyMessages))
+                        ->stream()) as $chunk) {
                         if (strlen($chunk) < 6) {
                             continue;
                         }
@@ -2336,9 +3197,47 @@ if (! empty($documentContext)) {
                         }
                         $chunk = str_replace('data: {', '{', $chunk);
                         $jsonData = json_decode($chunk, false, 512, JSON_THROW_ON_ERROR);
+                        $eventType = (string) ($jsonData->type ?? 'unknown');
+                        $anthropicEventTypes[$eventType] = ($anthropicEventTypes[$eventType] ?? 0) + 1;
+                        if ($eventType === 'error') {
+                            $anthropicProviderError = [
+                                'type' => $jsonData->error->type ?? null,
+                                'message' => $jsonData->error->message ?? null,
+                            ];
+                        }
+                        if ($eventType === 'message_delta') {
+                            $anthropicStopReason = $jsonData->delta->stop_reason ?? null;
+                        }
+                        if ($eventType === 'content_block_start') {
+                            $serverToolName = (string) ($jsonData->content_block->name ?? '');
+                            if (in_array($serverToolName, ['web_search', 'web_fetch'], true)) {
+                                echo PHP_EOL;
+                                echo "event: tool_status\n";
+                                echo 'data: ' . json_encode(
+                                    AiChatProService::progressPayload($serverToolName, 'working'),
+                                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                                ) . "\n\n";
+                                $this->safeFlush();
+                            }
+                        }
+                        if ($eventType === 'content_block_start'
+                            && in_array((string) ($jsonData->content_block->type ?? ''), ['web_search_tool_result', 'web_fetch_tool_result'], true)) {
+                            $serverToolName = (string) ($jsonData->content_block->type ?? '') === 'web_search_tool_result'
+                                ? 'web_search'
+                                : 'web_fetch';
+                            $serverToolState = ($jsonData->content_block->is_error ?? false) ? 'failed' : 'completed';
+                            echo PHP_EOL;
+                            echo "event: tool_status\n";
+                            echo 'data: ' . json_encode(
+                                AiChatProService::progressPayload($serverToolName, $serverToolState),
+                                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                            ) . "\n\n";
+                            $this->safeFlush();
+                        }
 
                         // Detect tool_use blocks
                         if (isset($jsonData->type) && $jsonData->type === 'content_block_start' && isset($jsonData->content_block->type) && $jsonData->content_block->type === 'tool_use') {
+                            $anthropicToolWasUsed = true;
                             $toolUseBlock = $jsonData->content_block;
                             $toolUseInput = '';
                         } elseif (isset($jsonData->type) && $jsonData->type === 'content_block_delta' && isset($jsonData->delta->type) && $jsonData->delta->type === 'input_json_delta') {
@@ -2346,6 +3245,117 @@ if (! empty($documentContext)) {
                         } elseif (isset($jsonData->type) && $jsonData->type === 'content_block_stop' && $toolUseBlock !== null) {
                             // Tool use complete — handle skill call
                             $functionName = $toolUseBlock->name ?? '';
+                            if ($functionName === $preferredChatProTool) {
+                                $preferredToolCalled = true;
+                            }
+                            if ($chat_type === 'chatPro'
+                                && AiChatProService::toolIsAvailable($functionName, $chatProTools)) {
+                                echo PHP_EOL;
+                                echo "event: tool_status\n";
+                                echo 'data: ' . json_encode(AiChatProService::progressPayload($functionName, 'working'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                                $this->safeFlush();
+
+                                $functionResponse = AiChatProService::callFunction($functionName, $toolUseInput)
+                                    ?? 'The requested action could not be completed. The capability did not return a result.';
+                                $pendingApprovalId = $this->takeAgentPendingApprovalId();
+                                $toolExecution = AiChatProService::toolExecutionPayload(
+                                    $functionName,
+                                    $functionResponse,
+                                    request()->boolean('agent_mode'),
+                                    $pendingApprovalId,
+                                );
+                                $toolState = $toolExecution['state'];
+                                $toolStatusPayload = AiChatProService::progressPayload($functionName, $toolState);
+                                if (isset($toolExecution['approvalId'])) {
+                                    $toolStatusPayload['approvalId'] = $toolExecution['approvalId'];
+                                }
+
+                                echo PHP_EOL;
+                                echo "event: tool_status\n";
+                                echo 'data: ' . json_encode($toolStatusPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                                $this->safeFlush();
+
+                                if ($this->stopAfterFailedArtifactTool(
+                                    $functionName,
+                                    $toolState,
+                                    $main_message,
+                                    $chat,
+                                    $responsedText,
+                                    $output,
+                                    $total_used_tokens,
+                                    $driver,
+                                )) {
+                                    return;
+                                }
+                                $this->emitCreatedArtifactEvent();
+
+                                if (AiChatProService::shouldExposeToolResult($functionName, $toolState)) {
+                                    $functionResponseForStream = str_replace(["\r\n", "\r", "\n"], '<br/>', $functionResponse);
+                                    $output .= $functionResponseForStream;
+                                    $responsedText .= $functionResponse;
+                                    $total_used_tokens += countWords($functionResponse);
+                                    $this->emitStreamChunk($functionResponseForStream);
+                                }
+
+                                if ($functionName === 'run_agent' && $toolState === 'failed') {
+                                    $this->saveStreamResponse($main_message, $chat, $responsedText, $output, $total_used_tokens, $driver);
+                                    $this->emitAgentExecutionError($functionResponse);
+
+                                    return;
+                                }
+
+                                $followUpMessages = array_values($historyMessages);
+                                $followUpMessages[] = [
+                                    'role' => 'assistant',
+                                    'content' => [[
+                                        'type' => 'tool_use',
+                                        'id' => $toolUseBlock->id,
+                                        'name' => $functionName,
+                                        'input' => json_decode($toolUseInput ?: '{}', true) ?: new stdClass,
+                                    ]],
+                                ];
+                                $followUpMessages[] = [
+                                    'role' => 'user',
+                                    'content' => [[
+                                        'type' => 'tool_result',
+                                        'tool_use_id' => $toolUseBlock->id,
+                                        'content' => $functionResponse,
+                                    ]],
+                                ];
+
+                                foreach ($this->anthropicStreamLines($client->setStream(true)
+                                    ->setSystem($system)
+                                    ->setTools([])
+                                    ->setToolChoice(null)
+                                    ->setMessages($followUpMessages)
+                                    ->stream()) as $followChunk) {
+                                    if (strlen($followChunk) < 6 || ! Str::contains($followChunk, 'data: ')) {
+                                        continue;
+                                    }
+                                    $followChunk = str_replace('data: {', '{', $followChunk);
+                                    try {
+                                        $followJson = json_decode($followChunk, false, 512, JSON_THROW_ON_ERROR);
+                                    } catch (JsonException) {
+                                        continue;
+                                    }
+                                    if (isset($followJson->delta->text)) {
+                                        $message = $followJson->delta->text;
+                                        $messageFix = str_replace(["\r\n", "\r", "\n"], '<br/>', $message);
+                                        $output .= $messageFix;
+                                        $responsedText .= $message;
+                                        $total_used_tokens += countWords($message);
+                                        $this->emitStreamChunk($messageFix);
+                                    }
+                                    if (connection_aborted()) {
+                                        break;
+                                    }
+                                }
+
+                                $toolUseBlock = null;
+
+                                continue;
+                            }
+
                             if (str_starts_with($functionName, 'connector_') && class_exists(ConnectorToolService::class)) {
                                 $connectorService = app(ConnectorToolService::class);
                                 $connectorArgs = json_decode($toolUseInput ?: '{}', true) ?: [];
@@ -2382,14 +3392,11 @@ if (! empty($documentContext)) {
                                     ],
                                 ];
 
-                                $followUpData = $client->setStream(true)
+                                foreach ($this->anthropicStreamLines($client->setStream(true)
                                     ->setSystem($system)
                                     ->setTools([])
                                     ->setMessages($followUpMessages)
-                                    ->stream()
-                                    ->body();
-
-                                foreach (explode("\n", $followUpData) as $followChunk) {
+                                    ->stream()) as $followChunk) {
                                     if (strlen($followChunk) < 6) {
                                         continue;
                                     }
@@ -2447,14 +3454,11 @@ if (! empty($documentContext)) {
                                         ],
                                     ];
 
-                                    $followUpData = $client->setStream(true)
+                                    foreach ($this->anthropicStreamLines($client->setStream(true)
                                         ->setSystem($system)
                                         ->setTools([])
                                         ->setMessages($followUpMessages)
-                                        ->stream()
-                                        ->body();
-
-                                    foreach (explode("\n", $followUpData) as $followChunk) {
+                                        ->stream()) as $followChunk) {
                                         if (strlen($followChunk) < 6) {
                                             continue;
                                         }
@@ -2490,6 +3494,63 @@ if (! empty($documentContext)) {
                         if (connection_aborted()) {
                             break;
                         }
+                    }
+                    if ($anthropicProviderError !== null) {
+                        $providerMessage = $anthropicProviderError['message'] ?? null;
+                        $providerMessage = is_string($providerMessage) && trim($providerMessage) !== ''
+                            ? trim($providerMessage)
+                            : 'The provider returned an error event.';
+
+                        throw new \RuntimeException('Anthropic stream error: ' . $providerMessage);
+                    }
+
+                    $refusalMessage = AnthropicService::refusalFallback($anthropicStopReason, $responsedText);
+                    if ($refusalMessage !== null) {
+                        $responsedText = $refusalMessage;
+                        $output = $refusalMessage;
+                        $this->emitStreamChunk($refusalMessage);
+                    }
+
+                    if (! isset($anthropicEventTypes['message_stop']) && ! connection_aborted()) {
+                        Log::warning('Anthropic stream ended before completion', [
+                            'model' => $driver?->enum()->value,
+                            'stream_events' => $anthropicEventTypes,
+                            'stop_reason' => $anthropicStopReason,
+                            'response_chars' => strlen($responsedText),
+                        ]);
+
+                        throw new \RuntimeException('Anthropic stream ended before message_stop.');
+                    }
+                    if (! $this->continueAnthropicTextResponse(
+                        $client,
+                        $system,
+                        array_values($historyMessages),
+                        $anthropicToolWasUsed,
+                        $anthropicStopReason,
+                        $responsedText,
+                        $output,
+                        $total_used_tokens,
+                    )) {
+                        return;
+                    }
+                    if ($chat_type === 'chatPro' && $preferredChatProTool !== null && ! $preferredToolCalled) {
+                        Log::warning('Anthropic Chat Pro did not call the requested artifact tool', [
+                            'model' => $driver?->enum()->value,
+                            'preferred_tool' => $preferredChatProTool,
+                            'stream_events' => $anthropicEventTypes,
+                            'message_id' => $main_message->id,
+                        ]);
+                        $toolFallback = 'Codsiga fayl-samaynta lama dhammaystirin, mana jiro fayl la sameeyey. Fadlan mar kale isku day ama dooro model kale.';
+                        $responsedText = $toolFallback;
+                        $output = $toolFallback;
+                        $total_used_tokens = countWords($toolFallback);
+                        echo PHP_EOL;
+                        echo "event: clear_content\n";
+                        echo "data: \n\n";
+                        echo "event: data\n";
+                        echo 'data: ' . $toolFallback;
+                        echo "\n\n";
+                        $this->safeFlush();
                     }
                 }
             } else {
@@ -2615,12 +3676,11 @@ if (! empty($documentContext)) {
                 }
 
             } else {
-                $data = $client->setStream(true)
+                $anthropicStopReason = null;
+                foreach ($this->anthropicStreamLines($client->setStream(true)
                     ->setSystem($system)
                     ->setMessages(array_values($historyMessages))
-                    ->stream()
-                    ->body();
-                foreach (explode("\n", $data) as $chunk) {
+                    ->stream()) as $chunk) {
                     if (strlen($chunk) < 6) {
                         continue;
                     }
@@ -2628,8 +3688,12 @@ if (! empty($documentContext)) {
                         continue;
                     }
                     $chunk = str_replace('data: {', '{', $chunk);
-                    if (isset(json_decode($chunk, false, 512, JSON_THROW_ON_ERROR)->delta->text)) {
-                        $message = json_decode($chunk, false, 512, JSON_THROW_ON_ERROR)->delta->text;
+                    $jsonData = json_decode($chunk, false, 512, JSON_THROW_ON_ERROR);
+                    if (($jsonData->type ?? null) === 'message_delta') {
+                        $anthropicStopReason = $jsonData->delta->stop_reason ?? null;
+                    }
+                    if (isset($jsonData->delta->text)) {
+                        $message = $jsonData->delta->text;
                         $messageFix = str_replace(["\r\n", "\r", "\n"], '<br/>', $message);
                         $output .= $messageFix;
                         $responsedText .= $message;
@@ -2644,6 +3708,16 @@ if (! empty($documentContext)) {
                     if (connection_aborted()) {
                         break;
                     }
+                }
+                $refusalMessage = AnthropicService::refusalFallback($anthropicStopReason, $responsedText);
+                if ($refusalMessage !== null) {
+                    $responsedText = $refusalMessage;
+                    $output = $refusalMessage;
+                    echo PHP_EOL;
+                    echo "event: data\n";
+                    echo 'data: ' . $refusalMessage;
+                    echo "\n\n";
+                    $this->safeFlush();
                 }
                 echo "event: stop\n";
                 echo 'data: [DONE]';
@@ -2683,18 +3757,30 @@ if (! empty($documentContext)) {
 
             $newhistory = [$newhistory];
         }
+        $chatProTools = $chat_type === 'chatPro' && Auth::check()
+            ? AiChatProService::toolsForPrompt((string) ($main_message->input ?? ''))
+            : [];
+        $preferredChatProTool = $chat_type === 'chatPro'
+            ? AiChatProService::preferredToolForPrompt((string) ($main_message->input ?? ''))
+            : null;
+        $chatProToolChoice = $preferredChatProTool
+            && AiChatProService::toolIsAvailable($preferredChatProTool, $chatProTools)
+                ? [
+                    'functionCallingConfig' => [
+                        'mode' => 'ANY',
+                        'allowedFunctionNames' => [$preferredChatProTool],
+                    ],
+                ]
+                : [];
+
         $this->prepareStreamEnvironment();
 
-        return response()->stream(function () use ($driver, $newhistory, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images, $chat_type) {
+        return response()->stream(function () use ($driver, $newhistory, &$total_used_tokens, &$output, &$responsedText, $main_message, $contain_images, $chat_type, $chatProTools, $chatProToolChoice) {
 
             $chat_id = $main_message->user_openai_chat_id;
             $chat = UserOpenaiChat::whereId($chat_id)->first();
             echo "event: message\n";
             echo 'data: ' . $main_message->id . "\n\n";
-
-            if ($contain_images) {
-                $driver = $this->createDriver(EntityEnum::GEMINI_1_5_FLASH);
-            }
 
             if (! $driver->hasCreditBalance()) {
                 echo PHP_EOL;
@@ -2726,10 +3812,31 @@ if (! empty($documentContext)) {
                 $geminiSkillTools[] = SmartImageService::geminiToolDefinition();
             }
 
+            if ($chat_type === 'chatPro' && ! $this->isCouncilSubRequest) {
+                foreach (AiChatProService::geminiTools() as $chatProToolGroup) {
+                    $declarationIndex = null;
+                    foreach ($geminiSkillTools as $index => $toolGroup) {
+                        if (isset($toolGroup['functionDeclarations'])) {
+                            $declarationIndex = $index;
+                            break;
+                        }
+                    }
+
+                    if ($declarationIndex === null) {
+                        $geminiSkillTools[] = $chatProToolGroup;
+                    } else {
+                        $geminiSkillTools[$declarationIndex]['functionDeclarations'] = array_merge(
+                            $geminiSkillTools[$declarationIndex]['functionDeclarations'],
+                            $chatProToolGroup['functionDeclarations'] ?? [],
+                        );
+                    }
+                }
+            }
+
             // Gemini native Google Search grounding when realtime + tool_calling mode is on.
             // Gemini 3.x can combine grounding with function declarations; older Gemini
             // versions cannot, so for them we drop function tools while grounding is active.
-            if (request()?->input('realtime')
+            if (! $chatProToolChoice && request()?->input('realtime')
                 && setting('default_realtime') === 'tool_calling') {
                 $modelValue = $driver->enum()->value;
                 $isGemini3Plus = str_starts_with($modelValue, 'gemini-3');
@@ -2750,6 +3857,7 @@ if (! empty($documentContext)) {
                 $response = $client
                     ->setHistory($newhistory)
                     ->setTools($geminiSkillTools)
+                    ->setToolConfig($chatProToolChoice)
                     ->streamGenerateContent($driver->enum()->value);
             } catch (Throwable $e) {
                 Log::error('[StreamDebug] Gemini connection failed', ['error' => $e->getMessage()]);
@@ -2898,6 +4006,131 @@ if (! empty($documentContext)) {
                                     }
                                 } catch (Throwable) {
                                     // Follow-up failed — images still load, text is skipped
+                                }
+
+                                continue;
+                            }
+
+                            if ($chat_type === 'chatPro'
+                                && AiChatProService::toolIsAvailable($functionName, $chatProTools)) {
+                                echo PHP_EOL;
+                                echo "event: function_call\n";
+                                echo 'data: ' . $functionName . "\n\n";
+                                echo PHP_EOL;
+                                echo "event: tool_status\n";
+                                echo 'data: ' . json_encode(AiChatProService::progressPayload($functionName, 'working'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                                $this->safeFlush();
+
+                                $toolArguments = is_array($part['functionCall']['args'] ?? null)
+                                    ? $part['functionCall']['args']
+                                    : [];
+                                $functionResponse = AiChatProService::callFunction(
+                                    $functionName,
+                                    json_encode($toolArguments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                                ) ?? 'The requested action could not be completed. The capability did not return a result.';
+                                $pendingApprovalId = $this->takeAgentPendingApprovalId();
+                                $toolExecution = AiChatProService::toolExecutionPayload(
+                                    $functionName,
+                                    $functionResponse,
+                                    request()->boolean('agent_mode'),
+                                    $pendingApprovalId,
+                                );
+                                $toolState = $toolExecution['state'];
+                                $toolStatusPayload = AiChatProService::progressPayload($functionName, $toolState);
+                                if (isset($toolExecution['approvalId'])) {
+                                    $toolStatusPayload['approvalId'] = $toolExecution['approvalId'];
+                                }
+
+                                echo PHP_EOL;
+                                echo "event: tool_status\n";
+                                echo 'data: ' . json_encode($toolStatusPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                                $this->safeFlush();
+
+                                if ($this->stopAfterFailedArtifactTool(
+                                    $functionName,
+                                    $toolState,
+                                    $main_message,
+                                    $chat,
+                                    $responsedText,
+                                    $output,
+                                    $total_used_tokens,
+                                    $driver,
+                                )) {
+                                    return;
+                                }
+                                $this->emitCreatedArtifactEvent();
+
+                                if (AiChatProService::shouldExposeToolResult($functionName, $toolState)) {
+                                    $functionResponseForStream = str_replace(["\r\n", "\r", "\n"], '<br/>', $functionResponse);
+                                    $output .= $functionResponseForStream;
+                                    $responsedText .= $functionResponse;
+                                    $total_used_tokens += countWords($functionResponse);
+                                    $this->emitStreamChunk($functionResponseForStream);
+                                }
+
+                                if ($functionName === 'run_agent' && $toolState === 'failed') {
+                                    $this->saveStreamResponse($main_message, $chat, $responsedText, $output, $total_used_tokens, $driver);
+                                    $this->emitAgentExecutionError($functionResponse);
+
+                                    return;
+                                }
+
+                                $functionCallData = $part['functionCall'];
+                                $functionCallData['args'] = $toolArguments !== [] ? (object) $toolArguments : new stdClass;
+                                $modelPart = ['functionCall' => $functionCallData];
+                                if (isset($part['thoughtSignature'])) {
+                                    $modelPart['thoughtSignature'] = $part['thoughtSignature'];
+                                }
+
+                                $followUpHistory = $newhistory;
+                                $followUpHistory[] = [
+                                    'role' => 'model',
+                                    'parts' => [$modelPart],
+                                ];
+                                $followUpHistory[] = [
+                                    'role' => 'user',
+                                    'parts' => [['functionResponse' => [
+                                        'name' => $functionName,
+                                        'id' => $functionId,
+                                        'response' => ['result' => $functionResponse],
+                                    ]]],
+                                ];
+
+                                $followUpClient = app(GeminiService::class);
+                                $followUpResponse = $followUpClient
+                                    ->setHistory($followUpHistory)
+                                    ->setTools([])
+                                    ->setToolConfig([])
+                                    ->streamGenerateContent($driver->enum()->value);
+
+                                while (! $followUpResponse->getBody()->eof()) {
+                                    $followLine = trim($followUpClient->readLine($followUpResponse->getBody()));
+                                    if ($followLine === '' || $followLine === '[' || $followLine === ']' || $followLine === ',') {
+                                        continue;
+                                    }
+                                    try {
+                                        $followDecoded = json_decode($followLine, true, 512, JSON_THROW_ON_ERROR);
+                                    } catch (JsonException) {
+                                        continue;
+                                    }
+                                    if (isset($followDecoded['error'])) {
+                                        break;
+                                    }
+                                    foreach ($followDecoded['candidates'] ?? [] as $followCandidate) {
+                                        foreach ($followCandidate['content']['parts'] ?? [] as $followPart) {
+                                            $followText = $followPart['text'] ?? '';
+                                            if ($followText !== '') {
+                                                $messageFix = str_replace(["\r\n", "\r", "\n"], '<br/>', $followText);
+                                                $output .= $messageFix;
+                                                $responsedText .= $followText;
+                                                $total_used_tokens += countWords($followText);
+                                                $this->emitStreamChunk($messageFix);
+                                            }
+                                        }
+                                    }
+                                    if (connection_aborted()) {
+                                        break;
+                                    }
                                 }
 
                                 continue;
@@ -3481,6 +4714,10 @@ if (! empty($documentContext)) {
                 $responsedText = $cleanText;
                 $output = (string) preg_replace('/^\s*(```[\w]*\s*(<br\s*\/?>|\s)*)?\{"title"\s*:\s*"[^"]*"[^}]*\}\s*(```\s*)?(<br\s*\/?>|\s)*/i', '', $output);
                 $this->emitChatTitle($chat, $title);
+                if ($responsedText === '' && $output === '') {
+                    $responsedText = $cleanText;
+                    $output = $cleanText;
+                }
 
                 // When the streaming title regex (line 152) never matched (e.g. title JSON
                 // split across chunks), titleBuffer holds the entire response. The title was
@@ -3500,6 +4737,7 @@ if (! empty($documentContext)) {
                         $this->safeFlush();
                     }
                 }
+
             } elseif ($bufferedContent !== '') {
                 // No title found — flush the buffered content as data so it appears in the bubble
                 echo PHP_EOL;
@@ -3510,6 +4748,27 @@ if (! empty($documentContext)) {
             }
 
             $this->isFirstMessage = false;
+        }
+
+        if (trim(strip_tags((string) $responsedText)) === ''
+            && trim(strip_tags((string) $output)) === ''
+            && trim((string) ($main_message->input ?? '')) !== ''
+            && ! connection_aborted()) {
+            Log::warning('AI stream ended without a user-visible response', [
+                'message_id' => $main_message->id,
+                'model' => $driver?->enum()->value ?? null,
+            ]);
+
+            $fallbackMessage = 'Waan ka xumahay—AI-gu ma soo celin jawaab ama ma dhammeystirin codsiga. Fadlan mar kale isku day; haddii ay soo noqoto, dooro model kale.';
+            $responsedText = $fallbackMessage;
+            $output = $fallbackMessage;
+            $total_used_tokens = countWords($fallbackMessage);
+
+            echo PHP_EOL;
+            echo "event: data\n";
+            echo 'data: ' . $fallbackMessage;
+            echo "\n\n";
+            $this->safeFlush();
         }
 
         // If still in entity block suppression, discard the buffer entirely (it's all entity/suggestions data)

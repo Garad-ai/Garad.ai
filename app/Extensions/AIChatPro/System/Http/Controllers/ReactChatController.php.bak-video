@@ -1,0 +1,798 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Extensions\AIChatPro\System\Http\Controllers;
+
+use App\Domains\Engine\Enums\EngineEnum;
+use App\Domains\Entity\Enums\EntityEnum;
+use App\Domains\Entity\Facades\Entity as EntityDriver;
+use App\Domains\Entity\Models\Entity;
+use App\Enums\AITokenType;
+use App\Http\Controllers\Controller;
+use App\Models\Setting;
+use App\Models\SettingTwo;
+use App\Models\User;
+use App\Models\UserOpenaiChatMessage;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Throwable;
+
+class ReactChatController extends Controller
+{
+    private ?Collection $modelDescriptorCache = null;
+
+    public function index(?string $slug = null): View
+    {
+        [$entryScriptUrl, $styleUrls, $viteDevServer, $assetsMissing] =
+            $this->resolveFrontendAssets();
+
+        return view('ai-chat-pro::react-chat', [
+            'entryScriptUrl' => $entryScriptUrl,
+            'styleUrls' => $styleUrls,
+            'viteDevServer' => $viteDevServer,
+            'assetsMissing' => $assetsMissing,
+            'slug' => $slug,
+            'brand' => $this->brandAssets(),
+            'bootstrap' => $this->bootstrapPayload(),
+            'apiBaseUrl' => rtrim((string) url('/'), '/'),
+        ]);
+    }
+
+    public function account(): JsonResponse
+    {
+        return response()
+            ->json($this->buildAccountPayload())
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function usage(): JsonResponse
+    {
+        return response()
+            ->json($this->buildUsagePayload())
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function subscription(): JsonResponse
+    {
+        return response()
+            ->json($this->buildSubscriptionPayload())
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function models(): JsonResponse
+    {
+        return response()
+            ->json($this->modelDescriptors()->values()->all())
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function imageProxy(\Illuminate\Http\Request $request)
+    {
+        $url = (string) $request->query('url', '');
+        $parts = parse_url($url);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+
+        $allowedHosts = array_filter([
+            'image.garad.ai',
+            strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST)),
+            strtolower((string) parse_url((string) config('filesystems.disks.r2.url'), PHP_URL_HOST)),
+        ]);
+
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '' || ! in_array($host, $allowedHosts, true)) {
+            return response()->json(['message' => 'Image host is not allowed.'], 422);
+        }
+
+        try {
+            $upstream = \Illuminate\Support\Facades\Http::timeout(30)->get($url);
+        } catch (Throwable $e) {
+            return response()->json(['message' => 'Unable to fetch image.'], 502);
+        }
+
+        $contentType = strtolower((string) $upstream->header('Content-Type'));
+        if (! $upstream->successful() || ! str_starts_with($contentType, 'image/')) {
+            return response()->json(['message' => 'Image not available.'], 404);
+        }
+
+        $name = preg_replace('/[^A-Za-z0-9._-]/', '_', basename((string) ($parts['path'] ?? 'image.png'))) ?: 'image.png';
+        $headers = [
+            'Content-Type' => $contentType,
+            'Cache-Control' => 'private, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+        if ($request->boolean('download')) {
+            $headers['Content-Disposition'] = 'attachment; filename="' . $name . '"';
+        }
+
+        return response($upstream->body(), 200, $headers);
+    }
+
+    public function imageModels(): JsonResponse
+    {
+        $rows = Entity::query()
+            ->isEnabled()
+            ->whereHas('tokens', function ($query) {
+                $query->where('type', AITokenType::IMAGE->value);
+            })
+            ->with('tokens')
+            ->get()
+            ->map(function (Entity $record) {
+                $enum = $this->entityEnumFromModel($record);
+                if (! $enum || $enum->tokenType() !== AITokenType::IMAGE) {
+                    return null;
+                }
+
+                $engine = $enum->engine();
+                $imageGenerator = match ($engine) {
+                    EngineEnum::OPEN_AI => $enum->value,
+                    EngineEnum::FAL_AI => 'fal-ai',
+                    EngineEnum::STABLE_DIFFUSION => 'stable_diffusion',
+                    EngineEnum::PI_API => $enum->value,
+                    default => null,
+                };
+                if (! $imageGenerator) {
+                    return null;
+                }
+
+                if ($engine === EngineEnum::STABLE_DIFFUSION) {
+                    $configuredModel = SettingTwo::getCache()->stablediffusion_default_model;
+                    $configuredModel = is_object($configuredModel) && isset($configuredModel->value)
+                        ? (string) $configuredModel->value
+                        : trim((string) $configuredModel);
+                    if ($configuredModel !== $enum->value) {
+                        return null;
+                    }
+                }
+
+                $displayName = trim((string) ($record->selected_title ?? $record->title ?? ''));
+                if ($displayName === '') {
+                    $displayName = (string) $enum->label();
+                }
+
+                $promptField = match (true) {
+                    $engine === EngineEnum::OPEN_AI => 'stable_description',
+                    $engine === EngineEnum::STABLE_DIFFUSION => 'stable_description',
+                    $engine === EngineEnum::FAL_AI && $enum === EntityEnum::IDEOGRAM => 'description_ideogram',
+                    $engine === EngineEnum::FAL_AI && str_contains($enum->value, 'nano-banana') => 'description_nano_banana_2',
+                    $engine === EngineEnum::FAL_AI && str_contains($enum->value, 'seedream') => 'description_seedream_v4',
+                    $engine === EngineEnum::FAL_AI && str_contains($enum->value, 'flux') => 'description_flux_pro',
+                    default => 'description',
+                };
+
+                $referenceMode = match (true) {
+                    $engine === EngineEnum::STABLE_DIFFUSION => 'image_src',
+                    $engine === EngineEnum::OPEN_AI => 'image_src_array',
+                    in_array($enum, [EntityEnum::FLUX_PRO_KONTEXT, EntityEnum::FLUX_PRO_KONTEXT_MAX_MULTI], true) => 'image_src_array',
+                    default => null,
+                };
+
+                $creditBalance = 0.0;
+                $isUnlimited = false;
+                $available = true;
+                try {
+                    $driver = EntityDriver::driver($enum);
+                    $creditBalance = (float) $driver->creditBalance();
+                    $isUnlimited = (bool) $driver->isUnlimitedCredit();
+                    $available = $isUnlimited || $creditBalance > 0;
+                } catch (Throwable) {
+                    $available = true;
+                }
+
+                $provider = Str::of($engine->value)->replace('_', ' ')->title()->toString();
+
+                return [
+                    'id' => $enum->value,
+                    'displayName' => $displayName,
+                    'description' => $available
+                        ? $provider . ($isUnlimited ? ' • Unlimited credits' : ' • Credits: ' . $this->formatCredit($creditBalance))
+                        : $provider . ' • No credits available',
+                    'provider' => $engine->value,
+                    'imageGenerator' => $imageGenerator,
+                    'falAiModel' => $engine === EngineEnum::FAL_AI ? $enum->value : null,
+                    'promptField' => $promptField,
+                    'referenceMode' => $referenceMode,
+                    'planRequirement' => $this->planRequirementForCurrentUser(),
+                    'availability' => ! $available
+                        ? 'unavailable'
+                        : ($enum->isBetaEntity() ? 'beta' : 'available'),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        return response()
+            ->json($rows)
+            ->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Read-only capability map for the composer "+" menu. It only reports what the
+     * existing Garad services already allow for the authenticated user; the actual
+     * work is still done by the existing generate-stream / deep-research / skills routes.
+     */
+    public function composerCapabilities(): JsonResponse
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        $isAdmin = $user->isAdmin();
+        $plan = $user->relationPlan;
+
+        $default = (string) setting('default_realtime', 'serper');
+        $settingsTwo = \App\Models\SettingTwo::getCache();
+        $webSearch = match (true) {
+            $default === 'serper'     => ! is_null($settingsTwo->serper_api_key ?? null),
+            $default === 'perplexity' => ! is_null(setting('perplexity_key')),
+            default                   => in_array($default, ['openai', 'tool_calling'], true),
+        };
+
+        $deepResearchRegistered = \App\Helpers\Classes\MarketplaceHelper::isRegistered('ai-chat-pro-deep-research');
+        $deepResearchAllowed = $deepResearchRegistered
+            && ($isAdmin || (bool) $plan?->checkOpenAiItem('deep_research'));
+
+        $canvasNative = \App\Helpers\Classes\MarketplaceHelper::isRegistered('canvas')
+            && (bool) setting('ai_chat_pro_canvas', 1);
+        $canvasViaResearch = ! $canvasNative
+            && $deepResearchRegistered
+            && (bool) setting('deep_research_auto_canvas', 1);
+
+        $skillsInstalled = class_exists(\App\Extensions\AIChatProSkills\System\Models\Skill::class);
+        $skillsEnabled = $skillsInstalled && (bool) setting('ai_chat_pro_skills_enabled', '1');
+        $skillsAllowed = $skillsEnabled && ($isAdmin || (bool) $plan?->checkOpenAiItem('ai_chat_pro_skills'));
+        $brandVoiceAllowed = $isAdmin || (bool) $plan?->checkOpenAiItem('brand_voice');
+
+        $promptSetting = setting('user_prompt_library');
+
+        return response()->json([
+            'webSearch'     => ['available' => $webSearch, 'provider' => $default],
+            'deepResearch'  => [
+                'available' => $deepResearchRegistered,
+                'allowed'   => $deepResearchAllowed,
+            ],
+            'canvas'        => ['available' => $canvasNative || $canvasViaResearch],
+            'promptLibrary' => ['available' => $promptSetting === null || (bool) $promptSetting],
+            'skills'        => ['available' => $skillsEnabled, 'allowed' => $skillsAllowed],
+            'brandVoice'    => [
+                'available' => $brandVoiceAllowed,
+                'companies' => $brandVoiceAllowed
+                    ? $user->getCompanies()->map(static fn ($company) => [
+                        'id'          => (string) $company->id,
+                        'name'        => (string) $company->name,
+                        'toneOfVoice' => (string) ($company->tone_of_voice ?? ''),
+                    ])->values()->all()
+                    : [],
+            ],
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    /** Same data set as PromptController::getAll(), returned as JSON instead of rendered HTML. */
+    public function composerPrompts(): JsonResponse
+    {
+        $userId = Auth::id();
+
+        $favourites = \App\Models\Favourite::query()
+            ->where('type', 'prompt')
+            ->where('user_id', $userId)
+            ->pluck('item_id')
+            ->map(static fn ($id) => (string) $id)
+            ->all();
+
+        $prompts = \App\Models\Prompt::query()
+            ->where('user_id', $userId)
+            ->orWhere('show_for_all', true)
+            ->get()
+            ->map(static fn ($prompt) => [
+                'id'       => (string) $prompt->id,
+                'title'    => (string) $prompt->title,
+                'prompt'   => (string) $prompt->prompt,
+                'favorite' => in_array((string) $prompt->id, $favourites, true),
+                'shared'   => (bool) $prompt->show_for_all,
+            ])->values()->all();
+
+        return response()->json($prompts)->header('Cache-Control', 'no-store');
+    }
+
+    public function composerBrandProducts(int $companyId): JsonResponse
+    {
+        $user = Auth::user();
+        if (! $user->isAdmin() && ! $user->relationPlan?->checkOpenAiItem('brand_voice')) {
+            abort(403, __('Brand Voice is unavailable on your current plan.'));
+        }
+
+        $company = $user
+            ->companies()
+            ->whereKey($companyId)
+            ->firstOrFail();
+
+        return response()->json(
+            $company->products()
+                ->orderBy('name')
+                ->get(['id', 'name', 'type'])
+                ->map(static fn ($product) => [
+                    'id'   => (string) $product->id,
+                    'name' => (string) $product->name,
+                    'type' => (int) $product->type,
+                ])
+                ->values()
+                ->all()
+        )->header('Cache-Control', 'no-store');
+    }
+
+    private function resolveFrontendAssets(): array
+    {
+        $assetBaseUrl = rtrim(
+            (string) env('GARAD_CHAT_FRONTEND_ASSET_URL', '/garad-ai-chat-pro/dist'),
+            '/'
+        );
+
+        $entryScriptUrl = null;
+        $styleUrls = [];
+
+        $manifest = $this->readFrontendManifest();
+        if (is_array($manifest)) {
+            $entry = $manifest['src/main.tsx'] ?? $manifest['index.html'] ?? null;
+
+            if (! is_array($entry)) {
+                $entry = collect($manifest)->first(
+                    static fn ($item) => is_array($item) && ($item['isEntry'] ?? false)
+                );
+            }
+
+            if (is_array($entry) && ! empty($entry['file']) && is_string($entry['file'])) {
+                $entryScriptUrl = $this->assetUrl($assetBaseUrl, $entry['file']);
+
+                $cssFiles = is_array($entry['css'] ?? null) ? $entry['css'] : [];
+
+                $styleUrls = collect($cssFiles)
+                    ->filter(static fn ($path) => is_string($path) && trim($path) !== '')
+                    ->map(fn ($path) => $this->assetUrl($assetBaseUrl, (string) $path))
+                    ->values()
+                    ->all();
+            }
+        }
+
+        $viteDevServer = null;
+        if (! $entryScriptUrl) {
+            $configuredDevServer = trim((string) env('GARAD_CHAT_FRONTEND_DEV_URL', ''));
+
+            if ($configuredDevServer !== '') {
+                $viteDevServer = rtrim($configuredDevServer, '/');
+            }
+        }
+
+        return [
+            $entryScriptUrl,
+            $styleUrls,
+            $viteDevServer,
+            ! $entryScriptUrl && ! $viteDevServer,
+        ];
+    }
+
+    private function readFrontendManifest(): ?array
+    {
+        $distPath = base_path('../garad-ai-chat-pro/dist');
+
+        $manifestPaths = [
+            $distPath . '/.vite/manifest.json',
+            $distPath . '/manifest.json',
+        ];
+
+        foreach ($manifestPaths as $manifestPath) {
+            if (! File::exists($manifestPath)) {
+                continue;
+            }
+
+            try {
+                $decoded = json_decode((string) File::get($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    private function assetUrl(string $baseUrl, string $path): string
+    {
+        return $baseUrl . '/' . ltrim($path, '/');
+    }
+
+    private function buildAccountPayload(): array
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        $models = $this->modelDescriptors();
+        $defaultModelId = $this->resolveDefaultModelId($models) ?? 'gpt-4o-mini';
+
+        return [
+            'user' => [
+                'id' => (string) $user->id,
+                'name' => $this->displayName($user),
+                'email' => (string) $user->email,
+                'type' => $user->type->value,
+                'avatarUrl' => $this->avatarUrl($user),
+            ],
+            'subscription' => $this->buildSubscriptionPayload(),
+            'authStatus' => 'authenticated',
+            'usage' => $this->buildUsagePayload(),
+            'preferences' => [
+                'theme' => 'light',
+                'language' => $this->languagePreference(),
+                'defaultMode' => 'chat',
+                'defaultModel' => $defaultModelId,
+                'reducedMotion' => false,
+                'responseTraits' => [],
+                'customInstructions' => '',
+                'notifications' => [
+                    'tasks' => true,
+                    'artifacts' => true,
+                    'tips' => true,
+                ],
+            ],
+            'memoryEnabled' => true,
+            'memories' => [],
+        ];
+    }
+
+    private function bootstrapPayload(): ?array
+    {
+        if (! Auth::check()) {
+            return null;
+        }
+
+        try {
+            return [
+                'account' => $this->buildAccountPayload(),
+                'models' => $this->modelDescriptors()->values()->all(),
+            ];
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function brandAssets(): array
+    {
+        $setting = \App\Models\Setting::getCache();
+        $resolve = static fn ($path) => empty($path)
+            ? null
+            : url(custom_theme_url(ltrim((string) $path, '/'), true));
+
+        return [
+            'logoUrl' => $resolve($setting->logo_path ?? null),
+            'logoMarkUrl' => $resolve($setting->logo_collapsed_path ?? null),
+        ];
+    }
+
+    private function avatarUrl(User $user): ?string
+    {
+        $avatar = trim((string) ($user->avatar ?? ''));
+
+        if ($avatar === '') {
+            return null;
+        }
+
+        if (preg_match('#^https?://#i', $avatar)) {
+            return $avatar;
+        }
+
+        return url(custom_theme_url(ltrim($avatar, '/'), true));
+    }
+
+    private function buildUsagePayload(): array
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        $plan = $user->activePlan();
+
+        $messagesUsed = UserOpenaiChatMessage::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('input')
+            ->count();
+
+        $messageLimit = max(0, (int) ($plan?->max_tokens ?? 0));
+
+        if ($messageLimit > 0 && $messagesUsed > $messageLimit) {
+            $messagesUsed = $messageLimit;
+        }
+
+        return [
+            'messages' => [
+                'used' => (int) $messagesUsed,
+                'limit' => $messageLimit,
+            ],
+            'agentRuns' => [
+                'used' => 0,
+                'limit' => max(0, (int) ($plan?->ai_agent_message_limit ?? 0)),
+            ],
+            'storageBytes' => [
+                'used' => 0,
+                'limit' => 0,
+            ],
+        ];
+    }
+
+    private function buildSubscriptionPayload(): ?array
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        $plan = $user->activePlan();
+        if (! $plan) {
+            return null;
+        }
+
+        $activeSubscription = getCurrentActiveSubscription($user->id)
+            ?? getCurrentActiveSubscriptionYokkasa($user->id);
+
+        return [
+            'id' => (string) ($activeSubscription?->id ?? $plan->id),
+            'planId' => $this->planRequirementForCurrentUser(),
+            'status' => (string) ($activeSubscription?->stripe_status ?? 'active'),
+            'billingProvider' => (string) ($activeSubscription?->paid_with ?? 'none'),
+        ];
+    }
+
+    private function modelDescriptors(): Collection
+    {
+        if ($this->modelDescriptorCache !== null) {
+            return $this->modelDescriptorCache;
+        }
+
+        $planRequirement = $this->planRequirementForCurrentUser();
+
+        $modelEnums = $this->chatModelEnumsForCurrentUser();
+
+        $recordsById = Entity::query()
+            ->whereIn('key', $modelEnums->map(static fn (EntityEnum $enum) => $enum->value)->all())
+            ->get()
+            ->keyBy(function (Entity $entity) {
+                return $this->entityEnumFromModel($entity)?->value;
+            });
+
+        return $this->modelDescriptorCache = $modelEnums
+            ->map(function (EntityEnum $enum) use ($recordsById, $planRequirement) {
+                $record = $recordsById->get($enum->value);
+
+                $displayName = trim((string) ($record?->selected_title ?? $record?->title ?? ''));
+                if ($displayName === '') {
+                    $displayName = trim((string) $enum->label());
+                }
+                if ($displayName === '') {
+                    $displayName = $enum->value;
+                }
+
+                $provider = Str::of($enum->engine()->value)
+                    ->replace('_', ' ')
+                    ->title()
+                    ->toString();
+
+                $creditBalance = 0.0;
+                $isUnlimited = false;
+                $isAvailable = true;
+
+                try {
+                    $driver = EntityDriver::driver($enum);
+
+                    $creditBalance = (float) $driver->creditBalance();
+                    $isUnlimited = (bool) $driver->isUnlimitedCredit();
+                    $isAvailable = $isUnlimited || $creditBalance > 0;
+                } catch (Throwable) {
+                    $isAvailable = true;
+                }
+
+                $description = $provider;
+                if (! $isAvailable) {
+                    $description .= ' • No credits available';
+                } elseif ($isUnlimited) {
+                    $description .= ' • Unlimited credits';
+                } else {
+                    $description .= ' • Credits: ' . $this->formatCredit($creditBalance);
+                }
+
+                $availability = ! $isAvailable
+                    ? 'unavailable'
+                    : ($enum->isBetaEntity() ? 'beta' : 'available');
+
+                return [
+                    'id' => $enum->value,
+                    'displayName' => $displayName,
+                    'description' => $description,
+                    'provider' => $enum->engine()->value,
+                    'capabilities' => $this->capabilitiesForModel($enum, $displayName),
+                    'planRequirement' => $planRequirement,
+                    'availability' => $availability,
+                ];
+            })
+            ->filter(static fn ($item) => is_array($item) && ! empty($item['id']))
+            ->values();
+    }
+
+    private function chatModelEnumsForCurrentUser(): Collection
+    {
+        $models = collect(Entity::planModels())
+            ->map(fn ($model) => $this->entityEnumFromModel($model))
+            ->filter(static fn ($enum) => $enum instanceof EntityEnum && $enum->isChatModel())
+            ->values();
+
+        $defaultModel = $this->defaultChatEntityEnum();
+        if ($defaultModel instanceof EntityEnum && $defaultModel->isChatModel()) {
+            $models->prepend($defaultModel);
+        }
+
+        return $models
+            ->unique(static fn (EntityEnum $enum) => $enum->value)
+            ->values();
+    }
+
+    private function defaultChatEntityEnum(): ?EntityEnum
+    {
+        try {
+            $setting = Setting::getCache();
+
+            $defaultEngine = EngineEnum::fromSlug(
+                setting('default_ai_engine', EngineEnum::OPEN_AI->slug())
+            );
+
+            $defaultModel = $defaultEngine->getDefaultWordModel($setting);
+
+            if ($defaultModel instanceof EntityEnum) {
+                return $defaultModel;
+            }
+
+            if (is_string($defaultModel)) {
+                return EntityEnum::tryFrom($defaultModel);
+            }
+
+            if (is_object($defaultModel) && isset($defaultModel->value) && is_string($defaultModel->value)) {
+                return EntityEnum::tryFrom($defaultModel->value);
+            }
+        } catch (Throwable) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private function resolveDefaultModelId(Collection $models): ?string
+    {
+        $defaultModel = $this->defaultChatEntityEnum();
+        if ($defaultModel instanceof EntityEnum) {
+            $exists = $models->contains(
+                static fn ($model) => is_array($model) && ($model['id'] ?? null) === $defaultModel->value
+            );
+
+            if ($exists) {
+                return $defaultModel->value;
+            }
+        }
+
+        $available = $models->first(static function ($model) {
+            return is_array($model) && ($model['availability'] ?? null) === 'available';
+        });
+
+        if (is_array($available) && ! empty($available['id'])) {
+            return (string) $available['id'];
+        }
+
+        $first = $models->first();
+
+        if (is_array($first) && ! empty($first['id'])) {
+            return (string) $first['id'];
+        }
+
+        return null;
+    }
+
+    private function entityEnumFromModel(mixed $model): ?EntityEnum
+    {
+        if ($model instanceof Entity && $model->key instanceof EntityEnum) {
+            return $model->key;
+        }
+
+        if ($model instanceof Entity && is_string($model->key)) {
+            return EntityEnum::tryFrom($model->key);
+        }
+
+        if (is_string($model)) {
+            return EntityEnum::tryFrom($model);
+        }
+
+        if (is_object($model) && isset($model->value) && is_string($model->value)) {
+            return EntityEnum::tryFrom($model->value);
+        }
+
+        return null;
+    }
+
+    private function capabilitiesForModel(EntityEnum $enum, string $displayName): array
+    {
+        $signature = Str::lower($enum->value . ' ' . $displayName);
+
+        $capabilities = ['chat', 'tools'];
+
+        if (
+            str_contains($signature, 'search') ||
+            str_contains($signature, 'research') ||
+            str_contains($signature, 'perplexity') ||
+            str_contains($signature, 'serper')
+        ) {
+            $capabilities[] = 'research';
+        }
+
+        if (str_contains($signature, 'vision') || str_contains($signature, 'omni')) {
+            $capabilities[] = 'vision';
+        }
+
+        if (
+            str_contains($signature, 'reason') ||
+            preg_match('/^o\\d/', $enum->value) === 1
+        ) {
+            $capabilities[] = 'reasoning';
+        }
+
+        return array_values(array_unique($capabilities));
+    }
+
+    private function displayName(User $user): string
+    {
+        $name = trim((string) ($user->fullName() ?? ''));
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        $name = trim((string) ($user->name ?? ''));
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        return (string) $user->email;
+    }
+
+    private function languagePreference(): string
+    {
+        $locale = Str::lower((string) app()->getLocale());
+
+        return Str::startsWith($locale, 'so') ? 'Somali' : 'English';
+    }
+
+    private function planRequirementForCurrentUser(): string
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        $plan = $user->activePlan();
+
+        if (! $plan) {
+            return 'free';
+        }
+
+        $signature = Str::lower(trim((string) ($plan->name . ' ' . $plan->plan_type)));
+
+        if ($plan->is_team_plan || Str::contains($signature, ['business', 'team', 'enterprise'])) {
+            return 'business';
+        }
+
+        if (Str::contains($signature, ['pro', 'premium', 'advanced'])) {
+            return 'pro';
+        }
+
+        return (float) $plan->price > 0 ? 'pro' : 'free';
+    }
+
+    private function formatCredit(float $credit): string
+    {
+        $normalized = rtrim(rtrim(number_format(max(0, $credit), 2, '.', ''), '0'), '.');
+
+        return $normalized === '' ? '0' : $normalized;
+    }
+}

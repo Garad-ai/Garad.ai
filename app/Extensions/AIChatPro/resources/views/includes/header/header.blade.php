@@ -5,13 +5,11 @@
 
 @if ($current_theme !== 'oupi' || ($current_theme === 'oupi' && !$is_auth))
     <div @class([
-        'lqd-chat-pro-header relative end-0 start-0 top-0 z-40 h-[--header-h] justify-between gap-3 bg-background px-3.5 transition-all md:px-5 lg:absolute lg:start-[--sidebar-w] lg:z-10 xl:px-8',
+        'lqd-chat-pro-header relative end-0 start-0 top-0 z-40 h-[--header-h] justify-center gap-3 bg-background px-3.5 transition-all md:px-5 lg:absolute lg:start-[--sidebar-w] lg:z-10 xl:px-8',
         'hidden lg:flex' => Auth::check(),
         'flex border-b max-md:-mx-2 md:max-lg:-mx-5' => !Auth::check(),
     ])>
         @include('ai-chat-pro::includes.header.header-left-col')
-        @include('ai-chat-pro::includes.header.header-mid-col')
-        @include('ai-chat-pro::includes.header.header-right-col')
     </div>
 @elseif($current_theme === 'oupi' && $is_auth)
     @include('ai-chat-pro::includes.header.header-left-col-oupi')

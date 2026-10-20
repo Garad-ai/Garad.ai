@@ -547,13 +547,20 @@ class AIChatController extends Controller
     public function chatOutput(Request $request): JsonResponse|StreamedResponse
     {
         $driver = Entity::driver();
+        $userId = (int) $request->user()->id;
         if ($request->isMethod('get')) {
             $driver->redirectIfNoCreditBalance();
             $conver_id = $request->conver_id;
             $message_id = $request->message_id;
-            $message = UserOpenaiChatMessage::whereId($message_id)->first();
+            $chat = UserOpenaiChat::query()
+                ->where('user_id', $userId)
+                ->whereKey($conver_id)
+                ->first();
+            $message = $chat?->messages()->whereKey($message_id)->first();
+            if (! $chat || ! $message) {
+                return response()->json(['message' => __('Chat or message not found.')], 404);
+            }
             $prompt = $message->input;
-            $chat = UserOpenaiChat::whereId($conver_id)->first(); // conversations
             // $lastThreeMessageQuery = $chat->messages()->whereNot('input', null)->orderBy('created_at', 'desc')->take(4);
             // $lastThreeMessage = $lastThreeMessageQuery->get()->reverse();
             $lastThreeMessageQuery = $chat->messages()
@@ -595,7 +602,7 @@ class AIChatController extends Controller
                 $history[] = ['role' => 'user', 'content' => $prompt];
             }
 
-            return response()->stream(function () use ($conver_id, $message_id, $history, $driver) {
+            return response()->stream(function () use ($conver_id, $message_id, $history, $driver, $userId) {
                 try {
                     $stream = OpenAI::chat()->createStreamed([
                         'model'             => $driver->enum()->value,
@@ -647,8 +654,11 @@ class AIChatController extends Controller
                         break;
                     }
                 }
-                $message = UserOpenaiChatMessage::whereId($message_id)->first();
-                $chat = UserOpenaiChat::whereId($conver_id)->first();
+                $chat = UserOpenaiChat::query()->where('user_id', $userId)->whereKey($conver_id)->first();
+                $message = $chat?->messages()->whereKey($message_id)->first();
+                if (! $chat || ! $message) {
+                    return;
+                }
                 $message->response = $responsedText;
                 $message->output = $output;
                 $message->hash = Str::random(256);
@@ -672,9 +682,18 @@ class AIChatController extends Controller
             ]);
         }
 
-        $chat = UserOpenaiChat::where('id', $request->conver_id)->first(); // conversation
-        $user = Auth::user();
-        $prompt = $request->prompt;
+        $chat = UserOpenaiChat::query()
+            ->where('user_id', $userId)
+            ->whereKey($request->input('conver_id'))
+            ->first();
+        if (! $chat) {
+            return response()->json(['message' => __('Chat not found.')], 404);
+        }
+        $validated = $request->validate([
+            'prompt' => ['required', 'string'],
+        ]);
+        $user = $request->user();
+        $prompt = $validated['prompt'];
         $documentService = new DocumentService();
 $documentContent = '';
         $total_used_tokens = 0;
@@ -808,15 +827,18 @@ $documentContent = '';
      */
     public function conversationChats(Request $request, $conver_id, $id = 0)
     {
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
         $conversation = UserOpenaiChat::where('user_id', $request->user()->id)->where('id', $conver_id)->first();
         $messages = [];
 
         if ($conversation != null) {
             if ($id == 0) {
                 $messagesQuery = $conversation->messages()->orderBy('created_at', 'desc');
-                $messages = $messagesQuery->paginate($request->input('per_page', 10));
+                $messages = $messagesQuery->paginate($validated['per_page'] ?? 10);
             } else {
-                $messages = UserOpenaiChatMessage::whereId($id)->first();
+                $messages = $conversation->messages()->whereKey($id)->first();
             }
         }
 

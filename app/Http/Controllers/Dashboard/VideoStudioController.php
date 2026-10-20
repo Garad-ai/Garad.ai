@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Extensions\AiCaptions\System\Models\AiCaptionVideo;
 use App\Extensions\AiVideoPro\System\Models\UserFall;
+use App\Extensions\AutoEditVideos\System\Models\AutoEditRender;
+use App\Extensions\VideoAgent\System\Models\VideoAgentVideo;
 use App\Extensions\VideoDubbing\System\Models\VideoDubbing;
 use App\Extensions\VideoEditor\System\Models\VideoEditorExportJob;
 use App\Helpers\Classes\MarketplaceHelper;
@@ -32,7 +34,9 @@ class VideoStudioController extends Controller
     private function tools(): array
     {
         return array_values(array_filter([
+            $this->videoAgentTool(),
             $this->aiVideoProTool(),
+            $this->autoEditVideosTool(),
             $this->aiCaptionsTool(),
             $this->videoEditorTool(),
             $this->videoDubbingTool(),
@@ -110,6 +114,47 @@ class VideoStudioController extends Controller
         }
     }
 
+    private function videoAgentTool(): ?array
+    {
+        if (! MarketplaceHelper::isRegistered('video-agent') || ! Route::has('dashboard.user.video-agent.index')) {
+            return null;
+        }
+
+        return [
+            'key'         => 'video-agent',
+            'label'       => __('Video Agent'),
+            'description' => __('Prompt to finished video'),
+            'card_image'  => asset('upload/images/studio/pro.webp'),
+            'entry_route' => 'dashboard.user.video-agent.index',
+            'resolver'    => fn (User $user, string $bucket, int $page, int $perPage) => $this->paginate(
+                VideoAgentVideo::query()->where('user_id', $user->id),
+                $bucket,
+                $page,
+                $perPage,
+                fn ($v) => [
+                    'source'             => 'video-agent',
+                    'source_label'       => __('Video Agent'),
+                    'id'                 => $v->uuid,
+                    'title'              => $v->displayTitle(),
+                    'thumb_url'          => $v->thumbnail_url,
+                    'video_url'          => $v->playbackUrl(),
+                    'status'             => $this->normalizeStatus($v->status->value, completed: ['completed'], failed: ['failed']),
+                    'created_at'         => optional($v->created_at)->diffForHumans(),
+                    'status_url'         => Route::has('dashboard.user.video-agent.check')
+                        ? route('dashboard.user.video-agent.check') . '?uuids[]=' . $v->uuid
+                        : null,
+                    'rename_url'         => null,
+                    'destroy_url'        => null,
+                    'prompt'             => $v->session?->prompt,
+                    'model'              => $v->kind->label(),
+                    'resolution'         => null,
+                    'aspect_ratio'       => null,
+                    'formatted_duration' => $v->duration_seconds ? $v->formattedDuration() : null,
+                ],
+            ),
+        ];
+    }
+
     private function aiVideoProTool(): ?array
     {
         if (! MarketplaceHelper::isRegistered('ai-video-pro') || ! Route::has('dashboard.user.ai-video-pro.index')) {
@@ -148,6 +193,49 @@ class VideoStudioController extends Controller
                     'resolution'         => $v->resolution,
                     'aspect_ratio'       => $v->aspect_ratio,
                     'formatted_duration' => $v->duration_seconds ? $v->formatted_duration : null,
+                ],
+            ),
+        ];
+    }
+
+    private function autoEditVideosTool(): ?array
+    {
+        if (! MarketplaceHelper::isRegistered('auto-edit-videos') || ! Route::has('dashboard.user.auto-edit-videos.index')) {
+            return null;
+        }
+
+        return [
+            'key'         => 'auto-edit-videos',
+            'label'       => __('Auto Edit Videos'),
+            'description' => __('Raw footage to a finished cut'),
+            'card_image'  => asset('upload/images/studio/pro.webp'),
+            'entry_route' => 'dashboard.user.auto-edit-videos.index',
+            'resolver'    => fn (User $user, string $bucket, int $page, int $perPage) => $this->paginate(
+                AutoEditRender::query()->where('user_id', $user->id)->with('session'),
+                $bucket,
+                $page,
+                $perPage,
+                fn (AutoEditRender $render) => [
+                    'source'             => 'auto-edit-videos',
+                    'source_label'       => __('Auto Edit Videos'),
+                    'id'                 => $render->uuid,
+                    'title'              => $render->displayTitle(),
+                    'thumb_url'          => $render->thumbnail_url,
+                    'video_url'          => $render->playbackUrl(),
+                    'status'             => $this->normalizeStatus(
+                        $render->status->value,
+                        completed: ['completed'],
+                        failed: ['failed', 'canceled'],
+                    ),
+                    'created_at'         => optional($render->created_at)->diffForHumans(),
+                    'status_url'         => Route::has('dashboard.user.auto-edit-videos.sessions.check') && $render->session
+                        ? route('dashboard.user.auto-edit-videos.sessions.check', $render->session)
+                        : null,
+                    'rename_url'         => null,
+                    'destroy_url'        => null,
+                    'prompt'             => $render->session?->prompt,
+                    'resolution'         => $render->target_resolution,
+                    'formatted_duration' => $render->duration_seconds ? $render->formattedDuration() : null,
                 ],
             ),
         ];

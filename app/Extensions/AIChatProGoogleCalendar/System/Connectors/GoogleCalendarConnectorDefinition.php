@@ -181,22 +181,15 @@ class GoogleCalendarConnectorDefinition implements ConnectorDefinition
     {
         $options = [];
 
-        try {
-            $calendar = $this->clientFactory->make($connector);
-            $result = $calendar->calendarList->listCalendarList();
+        $calendar = $this->clientFactory->make($connector);
+        $result = $calendar->calendarList->listCalendarList();
 
-            foreach ($result->getItems() ?? [] as $item) {
-                $options[] = [
-                    'id'   => (string) $item->getId(),
-                    'name' => (string) ($item->getSummary() ?: $item->getId()),
-                    'meta' => (string) ($item->getPrimary() ? __('Primary') : ($item->getAccessRole() ?? '')),
-                ];
-            }
-        } catch (Throwable $exception) {
-            Log::warning('[connectors] Google Calendar accessOptions failed', [
-                'connector_id' => $connector->id,
-                'message'      => $exception->getMessage(),
-            ]);
+        foreach ($result->getItems() ?? [] as $item) {
+            $options[] = [
+                'id'   => (string) $item->getId(),
+                'name' => (string) ($item->getSummary() ?: $item->getId()),
+                'meta' => (string) ($item->getPrimary() ? __('Primary') : ($item->getAccessRole() ?? '')),
+            ];
         }
 
         return [

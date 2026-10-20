@@ -99,7 +99,7 @@
                     $current_flux_model = EntityEnum::fromSlug(setting('fal_ai_default_model', EntityEnum::FLUX_PRO->slug()))->slug();
                 @endphp
                 <x-model-select-list-with-change-alert
-                    :listLabel="'Default Flux Image Model'"
+                    :listLabel="'Default FalAI Image Model'"
                     :listId="'fal_ai_default_model'"
                     currentModel="{{ $current_flux_model }}"
                     :drivers="$fluxDrivers"

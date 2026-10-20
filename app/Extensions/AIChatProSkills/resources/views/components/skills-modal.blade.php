@@ -913,12 +913,24 @@
                                 'X-Requested-With': 'XMLHttpRequest'
                             }
                         });
-                        const data = await res.json();
-                        this.skills = data.skills;
-                        this.skills.forEach(s => this.skillIdMap[s.name] = String(s.id));
-                        data.counts && this.tabs.forEach(t => t.count = data.counts[t.key] || 0);
+                        const data = await res.json().catch(() => ({}));
+                        const nextSkills = Array.isArray(data?.skills) ? data.skills : [];
+
+                        this.skills = nextSkills;
+                        nextSkills.forEach((s) => {
+                            if (s?.name && s?.id !== undefined && s?.id !== null) {
+                                this.skillIdMap[s.name] = String(s.id);
+                            }
+                        });
+
+                        if (data && typeof data === 'object' && data.counts) {
+                            this.tabs.forEach((t) => {
+                                t.count = data.counts[t.key] || 0;
+                            });
+                        }
                     } catch (err) {
                         console.error('Failed to fetch skills:', err);
+                        this.skills = [];
                     } finally {
                         this.loading = false;
                     }

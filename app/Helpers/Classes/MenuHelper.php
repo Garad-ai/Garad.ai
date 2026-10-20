@@ -4,6 +4,7 @@ namespace App\Helpers\Classes;
 
 use App\Extensions\Chatbot\System\Helpers\ChatbotHelper;
 use App\Models\OpenAIGenerator;
+use App\Models\Plan;
 use Illuminate\Support\Facades\Auth;
 
 class MenuHelper
@@ -46,7 +47,6 @@ class MenuHelper
         'ai_vision',
         'ai_product_shot',
         'ai_image_generator',
-        'ai_video',
         'seo_tool_extension',
         'ai_voiceover',
         'ai_pdf',
@@ -72,6 +72,7 @@ class MenuHelper
         'influencer_avatar',
         'brand_voice',
         'support',
+        'auto_edit_videos',
     ];
 
     public function __construct()
@@ -85,59 +86,67 @@ class MenuHelper
 
         $this->user = Auth::user();
 
-        // Team member uses team manager plan
         if ($this->user?->getAttribute('team_manager_id')) {
             $this->user = $this->user?->getAttribute('teamManager');
         }
 
-        $this->userPlan = $this->user?->relationPlan;
+        $this->userPlan = $this->user->relationPlan;
+
     }
 
-    public function checker(array $menu): bool
+    public function checker(array $menu)
     {
-        $slug = (string) data_get($menu, 'key', '');
+        $slug = $menu['key'];
 
-        // Admin always sees everything
+        $data = $this->routesDoesNotHaveAnySlug + $this->slugsNotInOpenAiGenerator + $this->freeOpenAiItems;
+
         if (Auth::user()?->isAdmin()) {
             return true;
         }
 
-        // Never show admin-only items to normal users
-        if (data_get($menu, 'is_admin', false)) {
+        $plan = $this?->userPlan;
+
+        $menuIsAdmin = data_get($menu, 'is_admin', false);
+
+        if (! $plan && $menuIsAdmin === false && $menu['type'] === 'item' && $menu['key'] !== 'dashboard') {
             return false;
         }
 
-        $plan = $this->userPlan;
-
-        /*
-         * Human Agent:
-         * user must have Chatbot access
-         * AND Human Agent permission.
-         */
         if ($slug === 'ext_chat_bot_agent') {
-            return (bool) $plan
-                && PlanHelper::planMenuCheck($plan, 'ext_chat_bot')
-                && ChatbotHelper::planAllowsHumanAgent($plan);
+            return ChatbotHelper::planAllowsHumanAgent($plan);
         }
 
-        // Respect global feature settings
-        $setting = $this->settingSlug($slug);
+        if (! in_array($slug, $data)) {
+            return true;
+        }
 
-        if ($setting['status']) {
-            $enabled = Helper::setting($setting['setting']);
+        $openAi = $this->generators
+            ->where('slug', $slug)
+            ->first();
 
-            if ((int) $enabled === 0) {
-                return false;
+        if (! $plan) {
+            // if no plan then its free user, can access all templates and features with credits they have except the premium
+            if (in_array($slug, $this->freeOpenAiItems, true)) {
+                return true;
+            }
+
+            return $openAi?->getAttribute('premium') !== 1;
+        }
+
+        if ($openAi || in_array($slug, $this->slugsNotInOpenAiGenerator, true)) {
+            $setting = $this->settingSlug($slug);
+            if ($setting['status']) {
+                $setting = Helper::setting($setting['setting']);
+                // abort if the feature is disabled, we don't need to return a message
+                if ($setting === 0) {
+                    return false;
+                }
+            }
+
+            if ($plan->checkOpenAiItem($slug)) {
+                return true;
             }
         }
-
-        /*
-         * ONE SOURCE OF TRUTH:
-         * Dashboard / Chat Pro / Documents
-         * Exact plan features
-         * Child menus inherited from plan parent
-         */
-        return PlanHelper::planMenuCheck($plan, $slug);
     }
 
     public function settingSlug($slug): array

@@ -37,24 +37,32 @@
         id="chat_form"
     >
         @csrf
+        {{-- GARAD_SAFE_V4_HIDDEN_TOOL --}}
+        <input id="garad_selected_tool" type="hidden" name="garad_selected_tool" value="">
 
         @includeIf('chat-pro-temp-chat::temp-desc', ['compact' => true, 'tempChat' => $tempChat])
 
         @includeIf('ai-chat-pro-deep-research::deep-research-desc')
 
         <div
-            class="lqd-chat-form-inputs-container flex min-h-[52px] w-full flex-col rounded-[26px] border border-solid border-heading-foreground/5 bg-background transition-colors lg:rounded-[35px] lg:border-none lg:bg-surface-background lg:shadow-[0_4px_60px_rgba(0,0,0,0.035)] dark:lg:bg-heading-foreground/15">
+            class="lqd-chat-form-inputs-container garad-chat-composer flex min-h-[52px] w-full flex-col rounded-[26px] border border-solid border-heading-foreground/5 bg-background transition-colors lg:rounded-[35px] lg:border-none lg:bg-surface-background lg:shadow-[0_4px_60px_rgba(0,0,0,0.035)] dark:lg:bg-heading-foreground/15">
+            
             <div
-                class="hidden max-h-32 w-full flex-wrap gap-5 overflow-y-auto p-2.5 [&.active]:flex"
+                class="garad-composer-attachments hidden w-full flex-wrap items-center gap-2 overflow-x-auto overflow-y-hidden px-3 pt-2 [&.active]:flex"
                 id="chat-attachment-previews"
+                aria-live="polite"
             ></div>
+
+            {{-- Keep selected tools attached to the same composer, directly above the prompt. --}}
+            @include('ai-chat-pro::includes.selected-tools')
 
             <div class="relative flex grow items-center max-md:px-2">
                 <input
                     id="selectImageInput"
                     type="file"
                     style="display: none;"
-                    @if ($category?->slug != 'ai_vision' && $category?->slug != 'ai_pdf' && !$fileChatAllowed) accept="image/*" @endif
+                    multiple
+                    accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.json,.xml,.html,.htm,.md,.ppt,.pptx,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,.ogg,.flac,.aac,.mov,.mkv,.avi,.m4v"
                 />
 
                 <x-forms.input
@@ -65,10 +73,10 @@
                         $input_padding_end_max_lg_classname,
                         'lg:ps-20 ps-11' => $category?->slug !== 'ai_pdf',
                     ])
-                    ::class="{ '!px-3 !mb-14 lg:!px-5 lg:!mb-[70px]': selectedTools.length }"
+                    ::class="{ '!px-3 lg:!px-5': selectedTools.length }"
                     container-class="w-full"
                     type="textarea"
-                    placeholder="{{ __('Type a message') }}"
+                    placeholder="{{ __('Message Garad AI') }}"
                     name="prompt"
                     rows="1"
                     x-model="prompt"
@@ -80,7 +88,7 @@
                     class="pointer-events-none absolute bottom-2 end-1.5 start-1.5 flex shrink-0 items-end justify-between gap-1 text-sm md:bottom-2 md:gap-1.5 lg:bottom-3.5 lg:end-5 lg:start-5 lg:gap-2.5">
                     <x-dropdown.dropdown
                         class="pointer-events-auto"
-                        class:dropdown="w-[200px] p-4 max-h-72 overflow-y-auto lg:-ms-4 border-none"
+                        class:dropdown="w-[320px] p-3 max-h-[520px] overflow-y-auto lg:-ms-4 border-none"
                         triggerType="click"
                         offsetY="22px"
                     >
@@ -109,6 +117,7 @@
                                     {{ __('Upload Files') }}
                                 </span>
                             </button>
+                            
 
                             <hr class="my-2.5">
 
@@ -297,12 +306,14 @@
                         </x-slot:dropdown>
                     </x-dropdown.dropdown>
 
-                    @include('ai-chat-pro::includes.selected-tools')
-
                     <div
                         class="ms-auto flex grow items-center justify-end gap-1 md:flex md:h-full md:gap-1.5 lg:gap-2.5"
                         id="chat-options"
                     >
+                        <div class="garad-composer-model-control pointer-events-auto">
+                            @include('components.select-ai-model-list', ['forceChatProPicker' => true])
+                        </div>
+
                         @includeIf('chat-pro-temp-chat::temp_chat_button', ['compact' => true, 'tempChat' => $tempChat, 'category' => $category])
 
                         @auth
@@ -405,6 +416,16 @@
             type="hidden"
             value=""
         />
+        <input
+            id="edit_message_id"
+            type="hidden"
+            value=""
+        />
+        <input
+            id="garad_reasoning_level"
+            type="hidden"
+            value="medium"
+        />
 
     </div>
     
@@ -415,11 +436,294 @@
     </span>
 </div>
 
+
+{{-- GARAD_CHAT_COMPOSER_FINAL_V67_START --}}
+<style id="garad-chat-composer-final-v67">
+    /*
+     * Garad Chat Pro composer polish.
+     * Keeps uploads, selected tools and prompt visually attached as one message.
+     * No backend behavior is changed here.
+     */
+    #chat_form .garad-chat-composer {
+        overflow: visible;
+    }
+
+    #chat_form .garad-capability-strip {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 10px 12px 0;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    #chat_form .garad-capability-strip::-webkit-scrollbar,
+    #chat_form #chat-attachment-previews::-webkit-scrollbar,
+    #chat_form .lqd-chat-pro-selected-tools-wrap::-webkit-scrollbar {
+        display: none;
+    }
+
+    #chat_form .garad-capability-btn {
+        display: inline-flex;
+        min-height: 30px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+        border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, currentColor 5%, transparent);
+        padding: 5px 9px;
+        color: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+    }
+
+    #chat_form .garad-capability-btn:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, #6d4aff 45%, transparent);
+        background: color-mix(in srgb, #6d4aff 9%, transparent);
+    }
+
+    #chat_form .garad-capability-btn svg {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
+    }
+
+    /* Compact upload chips: an uploaded image must not become a giant preview. */
+    #chat_form #chat-attachment-previews.active {
+        display: flex !important;
+        min-height: 0;
+        max-height: 64px;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 7px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 8px 12px 0;
+    }
+
+    #chat_form #chat-attachment-previews > * {
+        flex: 0 0 auto;
+        margin: 0 !important;
+    }
+
+    #chat_form #chat-attachment-previews > .relative:not(.ms-2) {
+        width: 46px;
+        height: 46px;
+    }
+
+    #chat_form #chat-attachment-previews img {
+        display: block;
+        width: 46px !important;
+        height: 46px !important;
+        max-width: 46px !important;
+        max-height: 46px !important;
+        margin: 0 !important;
+        border-radius: 11px !important;
+        object-fit: cover !important;
+        object-position: center !important;
+    }
+
+    #chat_form #chat-attachment-previews .prompt_image_close {
+        z-index: 3;
+        display: inline-flex;
+        width: 18px;
+        height: 18px;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border-radius: 999px;
+        box-shadow: 0 2px 7px rgba(0, 0, 0, .18);
+    }
+
+    #chat_form #chat-attachment-previews .prompt_image_close svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    #chat_form #chat-attachment-previews .promt_image_btn,
+    #chat_form #chat-attachment-previews .promt_image_btn button {
+        width: 46px !important;
+        height: 46px !important;
+        min-width: 46px !important;
+    }
+
+    #chat_form #chat-attachment-previews .promt_image_btn button {
+        border-radius: 11px !important;
+        font-size: 18px !important;
+        line-height: 1 !important;
+    }
+
+    /* PDF / Word / Excel / Slides / other uploaded files become compact pills. */
+    #chat_form #chat-attachment-previews > .relative.ms-2.flex {
+        min-height: 40px;
+        max-width: 230px;
+        margin-inline-start: 0 !important;
+        gap: 7px !important;
+        border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+        border-radius: 12px !important;
+        background: color-mix(in srgb, currentColor 5%, transparent) !important;
+        padding: 6px 9px !important;
+        font-size: 11.5px !important;
+    }
+
+    #chat_form #chat-attachment-previews > .relative.ms-2.flex > a {
+        min-width: 0;
+        max-width: 185px;
+    }
+
+    #chat_form #chat-attachment-previews > .relative.ms-2.flex > a span {
+        display: block;
+        max-width: 155px !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Brand Voice / Web Search / Skills chips now live directly above the prompt. */
+    #chat_form .lqd-chat-pro-selected-tools-wrap {
+        width: 100%;
+        max-width: 100%;
+        height: auto !important;
+        min-height: 0 !important;
+        flex: 0 0 auto;
+        gap: 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 7px 12px 0;
+    }
+
+    #chat_form .lqd-chat-pro-selected-tools-wrap.has-no-tools-selected {
+        display: none !important;
+        padding: 0 !important;
+    }
+
+    /* Remove the old large bottom gap that was reserved for selected tools. */
+    #chat_form #prompt {
+        min-height: 58px !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        padding-top: 14px !important;
+        padding-bottom: 14px !important;
+        line-height: 1.45 !important;
+    }
+
+    #chat_form .garad-chat-composer > .relative.flex.grow.items-center {
+        min-height: 58px;
+    }
+
+    #chat_form .garad-safe-create-icon {
+        display: inline-flex;
+        width: 18px;
+        height: 18px;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+    }
+
+    #chat_form .garad-safe-create-icon svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    /*
+     * Sent user attachments stay visually attached to the user's text.
+     * openai_chat.js renders them as .lqd-chat-image-bubble siblings.
+     */
+    .lqd-chat-user-bubble + .lqd-chat-image-bubble,
+    .lqd-chat-image-bubble + .lqd-chat-image-bubble {
+        margin-top: -4px !important;
+        margin-bottom: 7px !important;
+    }
+
+    .lqd-chat-image-bubble {
+        max-width: 300px !important;
+    }
+
+    .lqd-chat-image-bubble > a[data-type="image"] {
+        display: block;
+        width: auto;
+        max-width: 230px;
+        overflow: hidden;
+        border-radius: 16px;
+        background: color-mix(in srgb, currentColor 5%, transparent);
+    }
+
+    .lqd-chat-image-bubble > a[data-type="image"] .img-content {
+        display: block;
+        width: auto !important;
+        max-width: 230px !important;
+        height: auto !important;
+        max-height: 150px !important;
+        margin: 0 !important;
+        border-radius: 16px !important;
+        object-fit: cover !important;
+        object-position: center !important;
+    }
+
+    .lqd-chat-image-bubble > a:not([data-type="image"]) {
+        min-height: 38px;
+        max-width: 280px;
+        gap: 7px;
+        border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+        border-radius: 12px;
+        background: color-mix(in srgb, currentColor 5%, transparent);
+        padding: 7px 10px;
+        text-decoration: none !important;
+        font-size: 12px;
+    }
+
+    .lqd-chat-image-bubble > a:not([data-type="image"]) span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 640px) {
+        #chat_form .garad-capability-strip {
+            gap: 5px;
+            padding: 8px 8px 0;
+        }
+
+        #chat_form .garad-capability-btn {
+            min-height: 28px;
+            gap: 5px;
+            padding: 5px 8px;
+            font-size: 10.5px;
+        }
+
+        #chat_form #chat-attachment-previews.active,
+        #chat_form .lqd-chat-pro-selected-tools-wrap {
+            padding-inline: 8px;
+        }
+
+        #chat_form #prompt {
+            min-height: 54px !important;
+            padding-top: 12px !important;
+            padding-bottom: 12px !important;
+        }
+    }
+</style>
+{{-- GARAD_CHAT_COMPOSER_FINAL_V67_END --}}
+
+{{-- GARAD_FUNCTIONAL_V5_ASSETS_START --}}
+<link rel="stylesheet" href="{{ asset('themes/default/assets/css/garad_chatpro_functional_v5.css') }}?v=20260819.5">
+<script src="{{ asset('themes/default/assets/js/panel/garad_chatpro_functional_v5.js') }}?v=20260819.5" defer></script>
+{{-- GARAD_FUNCTIONAL_V5_ASSETS_END --}}
+
     @includeFirst(['ai-chat-pro-skills::components.skills-modal', 'vendor.empty'])
 
     @guest
         <p class="relative z-2 mx-auto text-center text-2xs text-heading-foreground/30 max-lg:px-6 lg:mb-0 lg:mt-6 lg:max-w-screen-md">
-            {{ __(setting('guest_user_bottom_text', 'Login to save your current session. © MagicAI 2025. All rights reserved.')) }}
+            {{ __(setting('guest_user_bottom_text', 'Login to save your current session. © Garad AI. All rights reserved.')) }}
             <br>
             <x-button
                 class="text-4xs uppercase tracking-widest text-heading-foreground/50 hover:text-heading-foreground"
@@ -431,3 +735,21 @@
         </p>
     @endguest
 </div>
+
+
+{{-- GARAD_V63_ASSETS_START --}}
+<link
+    rel="stylesheet"
+    href="{{ asset('themes/default/assets/css/garad_chatpro_v63.css') }}?v=20260903.90"
+>
+
+<script
+    src="{{ asset('themes/default/assets/js/panel/garad_chatpro_v63.js') }}?v=20260903.90"
+    defer
+></script>
+
+<script
+    src="{{ asset('themes/default/assets/js/panel/garad_chatpro_image_ui_v66.js') }}?v=20260820.68"
+    defer
+></script>
+{{-- GARAD_V63_ASSETS_END --}}

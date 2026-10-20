@@ -11,6 +11,7 @@ use App\Extensions\AIChatProNotion\System\Actions\Notion\SearchPagesAction;
 use App\Extensions\AIChatProNotion\System\OAuth\NotionOAuth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 class NotionConnectorDefinition implements ConnectorDefinition
@@ -174,41 +175,34 @@ class NotionConnectorDefinition implements ConnectorDefinition
         $accessToken = (string) $connector->getCredential('access_token');
 
         if ($accessToken === '') {
-            return ['type' => 'pages', 'label' => __('Pages'), 'options' => []];
+            throw new RuntimeException('The Notion connection has no access token.');
         }
 
         $options = [];
 
-        try {
-            $response = Http::withToken($accessToken)
-                ->withHeaders([
-                    'Notion-Version' => self::NOTION_VERSION,
-                    'Accept'         => 'application/json',
-                ])
-                ->asJson()
-                ->post('https://api.notion.com/v1/search', [
-                    'page_size' => 50,
-                    'filter'    => ['property' => 'object', 'value' => 'page'],
-                ])
-                ->throw();
+        $response = Http::withToken($accessToken)
+            ->withHeaders([
+                'Notion-Version' => self::NOTION_VERSION,
+                'Accept'         => 'application/json',
+            ])
+            ->asJson()
+            ->post('https://api.notion.com/v1/search', [
+                'page_size' => 50,
+                'filter'    => ['property' => 'object', 'value' => 'page'],
+            ])
+            ->throw();
 
-            foreach ((array) data_get($response->json(), 'results', []) as $item) {
-                $id = (string) data_get($item, 'id', '');
-                if ($id === '') {
-                    continue;
-                }
-
-                $options[] = [
-                    'id'   => $id,
-                    'name' => $this->extractTitle($item),
-                    'meta' => (string) data_get($item, 'last_edited_time', ''),
-                ];
+        foreach ((array) data_get($response->json(), 'results', []) as $item) {
+            $id = (string) data_get($item, 'id', '');
+            if ($id === '') {
+                continue;
             }
-        } catch (Throwable $exception) {
-            Log::warning('[connectors] Notion accessOptions failed', [
-                'connector_id' => $connector->id,
-                'message'      => $exception->getMessage(),
-            ]);
+
+            $options[] = [
+                'id'   => $id,
+                'name' => $this->extractTitle($item),
+                'meta' => (string) data_get($item, 'last_edited_time', ''),
+            ];
         }
 
         return [

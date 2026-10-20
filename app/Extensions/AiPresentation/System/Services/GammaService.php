@@ -80,32 +80,44 @@ if (!empty($validated['uploadedFiles'])) {
     }
 
 }
-        // Build the base required data with correct API parameter names
+        // Gamma v1.0 requires textMode. Keep user-facing content language
+        // separate from Gamma's accepted enum so Somali (and any future
+        // unsupported locale) never reaches textOptions.language directly.
+        [$gammaLanguage, $visibleLanguage] = $this->normalizeGammaLanguage(
+            (string) ($validated['requested_language'] ?? $validated['language'] ?? 'en')
+        );
+
+        $additionalInstructions = trim((string) ($validated['additionalInstructions'] ?? ''));
+        if ($visibleLanguage !== '') {
+            $languageInstruction = "Write all visible output text in {$visibleLanguage}. Do not switch the visible content language to English unless English was requested.";
+            $additionalInstructions = trim($languageInstruction . ' ' . $additionalInstructions);
+        }
+
+        // Build the v1.0 request using safe defaults. Existing callers that
+        // already provide these fields keep their values.
         $data = [
-            'inputText' => $prompt,
-            // 'themeName'  => $validated['theme'],
-            'numCards'   => (int) $validated['presentation_count'],
-           'exportAs'   => $validated['exportAs'] ?? 'pptx',
+            'inputText'               => $prompt,
+            'textMode'                => (string) ($validated['textMode'] ?? 'generate'),
+            'format'                  => (string) ($validated['format'] ?? 'presentation'),
+            'numCards'                => max(1, (int) ($validated['presentation_count'] ?? 10)),
+            'cardSplit'               => (string) ($validated['cardSplit'] ?? 'auto'),
+            'exportAs'                => (string) ($validated['exportAs'] ?? 'pptx'),
         ];
 
-        // Map text_length to textOptions.amount
+        if ($additionalInstructions !== '') {
+            $data['additionalInstructions'] = mb_substr($additionalInstructions, 0, 5000);
+        }
+
+        // Map text_length to textOptions.amount.
+        $amount = strtolower((string) ($validated['text_length'] ?? 'medium'));
+        if (! in_array($amount, ['brief', 'medium', 'detailed', 'extensive'], true)) {
+            $amount = 'medium';
+        }
+
         $textOptions = [
-            'amount'   => strtolower($validated['text_length']),
-            'language' => $validated['language'],
+            'amount'   => $amount,
+            'language' => $gammaLanguage,
         ];
-
-        // Add optional top-level fields
-        if (! empty($validated['textMode'])) {
-            $data['textMode'] = $validated['textMode'];
-        }
-      
-        if (! empty($validated['format'])) {
-            $data['format'] = $validated['format'];
-        }
-
-        if (! empty($validated['cardSplit'])) {
-            $data['cardSplit'] = $validated['cardSplit'];
-        }
 
         // Add optional textOptions (tone and audience)
         if (! empty($validated['textOptions']['tone'])) {
@@ -141,7 +153,7 @@ if (!empty($validated['uploadedFiles'])) {
         }
 
         // Make API request
-        $response = Http::withHeaders([
+        $response = Http::connectTimeout(10)->timeout(45)->withHeaders([
             'X-API-KEY'      => $this->apiKey,
             'Content-Type'   => 'application/json',
         ])->post($this->apiUrl, $data);
@@ -180,6 +192,42 @@ if (!empty($validated['uploadedFiles'])) {
         ];
     }
 
+    /** @return array{0:string,1:string} */
+    private function normalizeGammaLanguage(string $requested): array
+    {
+        $raw = trim($requested);
+        $normalized = strtolower(str_replace('_', '-', $raw));
+        $aliases = [
+            'english' => 'en', 'en-us' => 'en', 'british-english' => 'en-gb',
+            'somali' => 'so', 'som' => 'so', 'arabic' => 'ar', 'french' => 'fr',
+            'german' => 'de', 'italian' => 'it', 'spanish' => 'es', 'turkish' => 'tr',
+            'urdu' => 'ur', 'swahili' => 'sw',
+        ];
+        $normalized = $aliases[$normalized] ?? $normalized;
+
+        $supported = [
+            'en', 'en-gb', 'en-in', 'es', 'es-es', 'es-mx', 'es-419', 'ca', 'fr',
+            'zh-cn', 'zh-tw', 'ko', 'ja', 'ja-da', 'pt-br', 'pt-pt', 'de', 'it',
+            'ru', 'pl', 'uk', 'ro', 'hu', 'cs', 'el', 'tr', 'ar', 'ar-sa', 'he',
+            'fa', 'nl', 'sv', 'da', 'nb', 'fi', 'id', 'vi', 'hi', 'gu', 'mr',
+            'te', 'bn', 'ta', 'ur', 'kn', 'ml', 'th', 'sr', 'hr', 'sq', 'bg',
+            'sl', 'bs', 'mk', 'sw', 'ha', 'yo', 'tl', 'ms', 'kk', 'uz', 'af',
+            'lv', 'lt', 'et', 'is', 'cy',
+        ];
+
+        $display = [
+            'so' => 'Somali', 'en' => 'English', 'en-gb' => 'English', 'en-in' => 'English',
+            'ar' => 'Arabic', 'ar-sa' => 'Arabic', 'fr' => 'French', 'de' => 'German',
+            'it' => 'Italian', 'es' => 'Spanish', 'es-es' => 'Spanish', 'es-mx' => 'Spanish',
+            'es-419' => 'Spanish', 'tr' => 'Turkish', 'ur' => 'Urdu', 'sw' => 'Swahili',
+        ];
+
+        $visibleLanguage = $display[$normalized] ?? ($raw !== '' ? $raw : 'English');
+        $gammaLanguage = in_array($normalized, $supported, true) ? $normalized : 'en';
+
+        return [$gammaLanguage, mb_substr($visibleLanguage, 0, 80)];
+    }
+
     protected function storePresentationRecord(string $generationId, array $requestData): void
     {
         AiPresentation::create([
@@ -196,18 +244,33 @@ if (!empty($validated['uploadedFiles'])) {
 
     public function getGenerationStatus(string $generationId): array
     {
-        $response = Http::withHeaders([
+        $response = Http::connectTimeout(8)->timeout(20)->withHeaders([
             'X-API-KEY' => $this->apiKey,
         ])->get("{$this->apiUrl}/{$generationId}");
 
-        return $response->json();
+        if (! $response->successful()) {
+            throw new RuntimeException('Unable to read presentation status right now.');
+        }
+
+        $payload = $response->json();
+
+        if (! is_array($payload)) {
+            throw new RuntimeException('Presentation status returned an invalid response.');
+        }
+
+        return $payload;
     }
 
     public function updatePresentationStatus(string $generationId): ?AiPresentation
     {
+        if (! Auth::check()) {
+            return null;
+        }
+
         return DB::transaction(function () use ($generationId) {
-            // Lock the row to avoid race conditions from overlapping polls
+            // Lock only the current user's row to prevent cross-user status/download access.
             $presentation = AiPresentation::where('generation_id', $generationId)
+                ->where('user_id', Auth::id())
                 ->lockForUpdate()
                 ->first();
 
@@ -221,8 +284,13 @@ if (!empty($validated['uploadedFiles'])) {
                 'response_data' => $status,
             ];
 
-            if (isset($status['status'])) {
-                $updateData['status'] = $status['status'];
+            $providerStatus = strtolower(trim((string) ($status['status'] ?? '')));
+            if (in_array($providerStatus, ['completed', 'complete', 'success', 'done'], true)) {
+                $updateData['status'] = 'completed';
+            } elseif (in_array($providerStatus, ['failed', 'error', 'cancelled', 'canceled', 'expired'], true)) {
+                $updateData['status'] = 'failed';
+            } elseif ($providerStatus !== '') {
+                $updateData['status'] = 'processing';
             }
 
             if (isset($status['gammaUrl'])) {
@@ -237,7 +305,7 @@ if (!empty($validated['uploadedFiles'])) {
 
                     // Only fetch & save the PDF if we don't already have one
                     if (empty($presentation->pdf_url)) {
-                        $response = Http::get($pdfUrl);
+                        $response = Http::connectTimeout(10)->timeout(60)->get($pdfUrl);
                         if ($response->failed()) {
                             throw new RuntimeException('Failed to download PDF');
                         }
@@ -259,7 +327,7 @@ if (!empty($validated['uploadedFiles'])) {
 
                     // Only fetch & save the PPTX if we don't already have one
                     if (empty($presentation->pptx_url)) {
-                        $response = Http::get($pptxUrl);
+                        $response = Http::connectTimeout(10)->timeout(60)->get($pptxUrl);
                         if ($response->failed()) {
                             throw new RuntimeException('Failed to download PPTX');
                         }

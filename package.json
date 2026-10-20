@@ -3,9 +3,13 @@
 	"scripts": {
 		"lint": "eslint ./resources/views/page",
 		"dev": "vite",
-		"build": "NODE_OPTIONS=--max-old-space-size=4096 vite build",
+		"build": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
 		"clean": "vite clean",
-		"watch": "gulp watch"
+		"watch": "gulp watch",
+		"frontend:install": "corepack pnpm --dir frontend install --frozen-lockfile",
+		"frontend:dev": "npm --prefix frontend run dev",
+		"frontend:typecheck": "npm --prefix frontend exec -- tsc --project frontend/tsconfig.json --noEmit",
+		"frontend:build": "npm --prefix frontend run build"
 	},
 	"devDependencies": {
 		"@angular-eslint/template-parser": "^17.2.1",

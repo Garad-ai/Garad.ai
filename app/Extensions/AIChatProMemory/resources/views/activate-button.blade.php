@@ -157,7 +157,7 @@
                                 this.message = '';
 
                                 try {
-                                    const response = await fetch(`/ai-chat-pro-memory/instructions?chat_id=${this.chatId}`, {
+                                    const response = await fetch(`{{ url('/ai-chat-pro-memory/instructions') }}?chat_id=${this.chatId}`, {
                                         headers: {
                                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                                         }
@@ -190,7 +190,7 @@
                                 this.message = '';
 
                                 try {
-                                    const response = await fetch('/ai-chat-pro-memory/instructions', {
+                                    const response = await fetch('{{ url('/ai-chat-pro-memory/instructions') }}', {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json',
@@ -233,7 +233,7 @@
                                 this.message = '';
 
                                 try {
-                                    const response = await fetch(`/ai-chat-pro-memory/instructions?chat_id=${this.chatId}`, {
+                                    const response = await fetch(`{{ url('/ai-chat-pro-memory/instructions') }}?chat_id=${this.chatId}`, {
                                         method: 'DELETE',
                                         headers: {
                                             'Content-Type': 'application/json',

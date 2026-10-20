@@ -32,6 +32,7 @@ class ExtPhoneCallAgentFactory extends Factory
             'booking_provider'      => null,
             'booking_event_type_id' => null,
             'booking_api_key'       => null,
+            'booking_timezone'      => null,
         ];
     }
 }

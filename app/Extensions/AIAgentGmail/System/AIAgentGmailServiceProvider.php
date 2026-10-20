@@ -8,6 +8,7 @@ use App\Extensions\AIAgent\System\AIAgentServiceProvider;
 use App\Extensions\AIAgent\System\Engine\AIAgentActionRegistry;
 use App\Extensions\AIAgentGmail\System\Actions\GMailAction;
 use App\Extensions\AIAgentGmail\System\Http\Controllers\AIAgentGmailSettingController;
+use App\Extensions\AIAgentGmail\System\Http\Controllers\ConnectorController;
 use App\Extensions\AIAgentGmail\System\Http\Controllers\GmailApiController;
 use App\Extensions\AIAgentGmail\System\Http\Controllers\OAuth\GmailOAuthController;
 use App\Extensions\AIAgentGmail\System\Models\AIAgentConnector;

@@ -31,7 +31,7 @@ return [
     |
     */
 
-    'lifetime' => env('SESSION_LIFETIME', 120),
+    'lifetime' => env('SESSION_LIFETIME', 129600),
 
     'expire_on_close' => false,
 
@@ -168,7 +168,10 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE', true),
+    'secure' => env(
+        'SESSION_SECURE_COOKIE',
+        ! in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)
+    ),
 
     /*
     |--------------------------------------------------------------------------
@@ -196,6 +199,6 @@ return [
     |
     */
 
-    'same_site' => 'none',
+    'same_site' => env('SESSION_SAME_SITE', 'lax'),
 
 ];

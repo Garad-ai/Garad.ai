@@ -151,7 +151,7 @@
                     <div
                         class="grid grid-cols-1 gap-4 md:grid-cols-2"
                         id="lqd-prompt-list"
-                        x-init="$ajax('/dashboard/user/openai/chat/prompts', { method: 'POST' })"
+                        x-init="$ajax('{{ url('/dashboard/user/openai/chat/prompts') }}', { method: 'POST' })"
                     >
                     </div>
 

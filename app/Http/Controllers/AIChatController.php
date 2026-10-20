@@ -12,6 +12,8 @@ use App\Enums\AiImageStatusEnum;
 use App\Enums\BedrockEngine;
 use App\Extensions\ElevenLabsVoiceChat\System\Services\ElevenLabsVoiceChatService;
 use App\Helpers\Classes\ApiHelper;
+use App\Helpers\Classes\ChatAttachmentReferences;
+use App\Helpers\Classes\DefaultOpenAiImageModel;
 use App\Helpers\Classes\Helper;
 use App\Helpers\Classes\MarketplaceHelper;
 use App\Helpers\Classes\OpenAiParamHelper;
@@ -62,7 +64,7 @@ use Throwable;
 
 class AIChatController extends Controller
 {
-    private const SIDEBAR_HISTORY_LIMIT_DEFAULT = 500;
+    private const SIDEBAR_HISTORY_LIMIT_DEFAULT = 100;
 
     protected $client;
 
@@ -70,11 +72,14 @@ class AIChatController extends Controller
 
     protected $settings_two;
 
-    protected BedrockRuntimeService $bedrockService;
+    protected ?BedrockRuntimeService $bedrockService = null;
 
-    public function __construct(BedrockRuntimeService $bedrockService)
+    public function __construct()
     {
-        $this->bedrockService = $bedrockService;
+        if (request()->route()?->getActionMethod() === 'startNewChat') {
+            return;
+        }
+
         $this->settings = Setting::getCache();
         $this->settings_two = SettingTwo::getCache();
         $apiKey = $this->getOpenAiApiKey(Auth::user());
@@ -130,9 +135,12 @@ class AIChatController extends Controller
         $validated = $request->validate([
             'folder_id'   => 'nullable|integer',
             'per_page'    => 'nullable|integer|min:1|max:100',
+            'is_pinned'   => 'nullable|boolean',
             'category_id' => 'nullable|integer',
             'search'      => 'nullable|string|max:255',
+            'scope'       => 'nullable|in:sidebar_all',
             'website_url' => 'nullable|string|max:255',
+            'mode'        => 'nullable|in:chat,agents',
         ]);
 
         $perPage = $validated['per_page'] ?? 20;
@@ -144,7 +152,7 @@ class AIChatController extends Controller
         $isChatProContext = in_array($websiteUrl, ['chatpro', 'chatpro-temp', 'chatPro', 'chatpro-image', 'social-media-agent', 'crm-assistant'], true);
         $foldersEnabled = $isChatProContext && MarketplaceHelper::isRegistered('ai-chat-pro-folders');
 
-        $selectColumns = ['id', 'title', 'created_at', 'is_pinned', 'updated_at', 'reference_url', 'doc_name', 'website_url'];
+        $selectColumns = ['id', 'title', 'created_at', 'is_pinned', 'updated_at', 'reference_url', 'doc_name', 'website_url', 'openai_chat_category_id'];
 
         if ($foldersEnabled) {
             $selectColumns[] = 'folder_id';
@@ -154,20 +162,36 @@ class AIChatController extends Controller
             ->where('user_id', Auth::id())
             ->where('is_chatbot', 0)
             ->select($selectColumns)
+            ->when(array_key_exists('is_pinned', $validated), fn ($query) => $query->where('is_pinned', (bool) $validated['is_pinned']))
             ->orderByDesc('is_pinned')
             ->orderByDesc('updated_at');
 
         $this->applyWebsiteChatTypeScope($query, $websiteUrl);
+
+        $agentConversationTableExists = Schema::hasTable('ext_ai_chat_pro_agent_conversations');
+        if ($agentConversationTableExists && isset($validated['mode'])) {
+            $agentChatIds = DB::table('ext_ai_chat_pro_agent_conversations')
+                ->select('chat_id')
+                ->where('user_id', Auth::id());
+
+            if ($validated['mode'] === 'agents') {
+                $query->whereIn('user_openai_chat.id', $agentChatIds);
+            } else {
+                $query->whereNotIn('user_openai_chat.id', $agentChatIds);
+            }
+        } elseif (($validated['mode'] ?? null) === 'agents') {
+            $query->whereRaw('1 = 0');
+        }
 
         if ($categoryId !== null) {
             $query->where('openai_chat_category_id', $categoryId);
         }
 
         if ($foldersEnabled && ($search === null || $search === '')) {
-            if ($folderId === null) {
-                $query->whereNull('folder_id');
-            } else {
+            if ($folderId !== null) {
                 $query->where('folder_id', $folderId);
+            } elseif (($validated['scope'] ?? null) !== 'sidebar_all') {
+                $query->whereNull('folder_id');
             }
         }
 
@@ -176,6 +200,14 @@ class AIChatController extends Controller
         }
 
         $chats = $query->paginate($perPage);
+        $agentChatIds = $agentConversationTableExists
+            ? DB::table('ext_ai_chat_pro_agent_conversations')
+                ->where('user_id', Auth::id())
+                ->whereIn('chat_id', collect($chats->items())->pluck('id'))
+                ->pluck('chat_id')
+                ->map(static fn ($id): string => (string) $id)
+                ->all()
+            : [];
 
         $thumbnails = [];
         $isChatProImage = $websiteUrl === 'chatpro-image'
@@ -189,16 +221,18 @@ class AIChatController extends Controller
             }
         }
 
-        $chatsData = collect($chats->items())->map(function ($chat) use ($thumbnails, $foldersEnabled) {
+        $chatsData = collect($chats->items())->map(function ($chat) use ($thumbnails, $foldersEnabled, $agentChatIds) {
             $data = [
                 'id'            => $chat->id,
                 'title'         => $chat->title,
+                'mode'          => in_array((string) $chat->id, $agentChatIds, true) ? 'agents' : 'chat',
                 'created_at'    => $chat->created_at?->toIso8601String(),
                 'updated_at'    => $chat->updated_at?->toIso8601String(),
                 'is_pinned'     => (bool) $chat->is_pinned,
                 'reference_url' => $chat->reference_url,
                 'doc_name'      => $chat->doc_name,
                 'website_url'   => $chat->website_url,
+                'openai_chat_category_id' => $chat->openai_chat_category_id,
                 'folder_id'     => $foldersEnabled ? $chat->folder_id : null,
             ];
 
@@ -211,6 +245,7 @@ class AIChatController extends Controller
 
         return response()->json([
             'success'    => true,
+            'user_id'    => Auth::id(),
             'chats'      => $chatsData,
             'pagination' => [
                 'current_page' => $chats->currentPage(),
@@ -324,7 +359,11 @@ class AIChatController extends Controller
     {
         if (MarketplaceHelper::isRegistered('ai-chat-pro')) {
             if (in_array(setting('ai_chat_display_type', 'menu'), ['ai_chat', 'both']) || str_contains(url()->previous(), 'chat/pro/chat')) {
-                return redirect()->route('dashboard.user.openai.chat.pro.index', ['slug' => $slug]);
+                if (auth()->user()?->isAdmin()) {
+                    return redirect()->route('dashboard.user.openai.chat.pro.index', ['slug' => $slug]);
+                }
+
+                return redirect()->route('chat.pro', ['slug' => $slug]);
             }
         }
 
@@ -481,7 +520,7 @@ class AIChatController extends Controller
             })
             ->get();
         $website_url = $request->website_url ?? null;
-        $chatQuery = UserOpenaiChat::query()->where('id', $request->chat_id);
+        $chatQuery = $this->openai($request)->whereKey($request->chat_id);
         $this->applyWebsiteChatTypeScope($chatQuery, $website_url);
         $chat = $chatQuery->first();
 
@@ -588,16 +627,132 @@ class AIChatController extends Controller
 
     public function openChatBotArea(Request $request): JsonResponse
     {
-        $chat = UserOpenaiChat::with(['messages' => function ($query) {
-            $query->where('user_id', auth()->id());
-        }])->where('id', $request->chat_id)->first();
+        $validated = $request->validate([
+            'chat_id'     => 'required|integer|min:1',
+            'website_url' => 'nullable|string|max:255',
+            'messages_only' => 'nullable|boolean',
+        ]);
+        $chatQuery = UserOpenaiChat::query()
+            ->whereKey($validated['chat_id'])
+            ->where('user_id', Auth::id())
+            ->where('is_chatbot', 0);
+        if (! empty($validated['website_url'])) {
+            $this->applyWebsiteChatTypeScope($chatQuery, $validated['website_url']);
+        }
+        $chat = $chatQuery->first();
 
-        $category = $chat?->category;
+        if (! $chat) {
+            return response()->json(['message' => __('Chat not found.')], 404);
+        }
+
+        if ($request->boolean('messages_only')) {
+            $messages = $chat->messages()
+                ->where('user_id', Auth::id())
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get([
+                    'id',
+                    'input',
+                    'response',
+                    'output',
+                    'images',
+                    'pdfName',
+                    'pdfPath',
+                    'created_at',
+                    'updated_at',
+                ]);
+
+            return response()->json([
+                'messages' => $this->attachChatArtifacts($messages, (int) $chat->id),
+            ]);
+        }
+
+        $category = $chat->category;
         $html = view('panel.user.openai_chat.components.chat_area', compact('chat', 'category'))->render();
-        $lastThreeMessageQuery = $chat?->messages()->whereNot('input', null)->where('user_id', auth()->user()->id)->orderBy('created_at', 'desc');
-        $lastThreeMessage = $lastThreeMessageQuery->get()->toArray();
+        $lastThreeMessage = $chat->messages()
+            ->whereNotNull('input')
+            ->where('user_id', Auth::id())
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+        $lastThreeMessage = $this->attachChatArtifacts($lastThreeMessage, (int) $chat->id)
+            ->toArray();
+        $conversation = [
+            'id'         => $chat->id,
+            'title'      => $chat->title,
+            'mode'       => Schema::hasTable('ext_ai_chat_pro_agent_conversations')
+                && DB::table('ext_ai_chat_pro_agent_conversations')
+                    ->where('chat_id', $chat->id)
+                    ->where('user_id', Auth::id())
+                    ->exists()
+                    ? 'agents'
+                    : 'chat',
+            'created_at' => $chat->created_at?->toIso8601String(),
+            'updated_at' => $chat->updated_at?->toIso8601String(),
+            'is_pinned'  => (bool) $chat->is_pinned,
+            'folder_id'  => $chat->folder_id,
+        ];
 
-        return response()->json(compact('html', 'lastThreeMessage'));
+        return response()->json(compact('html', 'lastThreeMessage', 'conversation'));
+    }
+
+    private function attachChatArtifacts(Collection $messages, int $chatId): Collection
+    {
+        $artifactsByMessage = [];
+        if (
+            $messages->isNotEmpty() &&
+            MarketplaceHelper::isRegistered('ai-chat-pro') &&
+            Schema::hasTable('ai_chat_pro_artifacts') &&
+            Schema::hasColumn('ai_chat_pro_artifacts', 'user_openai_chat_message_id')
+        ) {
+            $artifactRows = DB::table('ai_chat_pro_artifacts')
+                ->where('user_id', Auth::id())
+                ->where('user_openai_chat_id', $chatId)
+                ->whereIn('user_openai_chat_message_id', $messages->pluck('id'))
+                ->orderBy('id')
+                ->get();
+
+            foreach ($artifactRows as $artifact) {
+                $type = strtolower((string) $artifact->type);
+                $kind = match ($type) {
+                    'pdf' => 'pdf',
+                    'doc', 'docx' => 'document',
+                    'xls', 'xlsx' => 'spreadsheet',
+                    'ppt', 'pptx' => 'presentation',
+                    default => 'generated',
+                };
+                $url = route('dashboard.user.openai.chat.pro.artifacts.download', [
+                    'artifact' => $artifact->id,
+                ]);
+                $metadata = json_decode((string) ($artifact->metadata ?? ''), true) ?: [];
+
+                $artifactsByMessage[(string) $artifact->user_openai_chat_message_id][] = [
+                    'id' => (string) $artifact->id,
+                    'name' => (string) $artifact->original_name,
+                    'kind' => $kind,
+                    'description' => (string) $artifact->title,
+                    'status' => 'ready',
+                    'url' => $url,
+                    'downloadUrl' => $url,
+                    'previewUrl' => in_array($type, ['pdf', 'doc', 'docx', 'xlsx', 'xls'], true)
+                        ? $url . '?preview=1'
+                        : null,
+                    'slideCount' => isset($metadata['slide_count']) ? (int) $metadata['slide_count'] : null,
+                    'externalUrl' => $metadata['external_url'] ?? null,
+                    'createdAt' => optional($artifact->created_at)->toIso8601String(),
+                    'updatedAt' => optional($artifact->updated_at)->toIso8601String(),
+                ];
+            }
+        }
+
+        foreach ($messages as $message) {
+            $message->setAttribute(
+                'artifacts',
+                $artifactsByMessage[(string) $message->id] ?? [],
+            );
+        }
+
+        return $messages;
     }
 
     /**
@@ -607,17 +762,36 @@ class AIChatController extends Controller
      */
     public function startNewChat(Request $request): JsonResponse
     {
-        Helper::clearEmptyConversations();
+        $reactChat = $request->boolean('react_chat');
+        if (! $reactChat) {
+            Helper::clearEmptyConversations();
+        }
 
+        $validated = $request->validate([
+            'category_id' => 'nullable|integer|min:1',
+            'website_url' => 'nullable|string|max:255',
+            'react_chat'  => 'nullable|boolean',
+        ]);
         $user = Auth::user();
-        $category = OpenaiGeneratorChatCategory::where('id', $request->category_id)->firstOrFail();
+        $categoryQuery = OpenaiGeneratorChatCategory::query()
+            ->whereNotIn('slug', ['ai_vision', 'ai_webchat', 'ai_pdf'])
+            ->when($user?->isUser(), function ($query) use ($user) {
+                $query->where(function ($query) use ($user) {
+                    $query->whereNull('user_id')->orWhere('user_id', $user->id);
+                });
+            });
+        $category = isset($validated['category_id'])
+            ? (clone $categoryQuery)->whereKey($validated['category_id'])->firstOrFail()
+            : $this->firstOpenaiGeneratorChatCategory();
+        abort_if(! $category, 404, __('No chat category is available for this account.'));
         $chatbot = Chatbot::query()->where('id', $category->chatbot_id)->first();
-        if ($category->assistant !== null) {
+        $thread = null;
+        if ($category->assistant !== null && ! $reactChat) {
             $service = new AssistantService;
             $thread = $service->createThread();
         }
         $chat = new UserOpenaiChat;
-        $website_url = $request->website_url ?? null;
+        $website_url = $validated['website_url'] ?? null;
 
         if (in_array($website_url, ['social-media-agent', 'chatpro-image', 'crm-assistant'], true)) {
             $chat->chat_type = $website_url;
@@ -668,6 +842,15 @@ class AIChatController extends Controller
         $message->credits = 0;
         $message->words = 0;
         $message->save();
+        if ($reactChat) {
+            return new JsonResponse([
+                'chat' => [
+                    'id'                       => $chat->id,
+                    'openai_chat_category_id' => $category->id,
+                ],
+            ]);
+        }
+
         if (setting('realtime_voice_chat', 0)) {
             $apiKey = $this->getOpenAiApiKey(Auth::user());
             $len = strlen($apiKey);
@@ -1106,10 +1289,16 @@ class AIChatController extends Controller
     {
         $user = Auth::user();
         $chat_id = $request->get('chat_id');
-        $chat = UserOpenaiChat::whereId($chat_id)->first();
+        $chat = $this->openai($request)->whereKey($chat_id)->first();
+        if (! $chat) {
+            return response()->json(['message' => __('Chat not found.')], 404);
+        }
 
         if ($request->isMethod('post')) {
             $prompt = $request->get('prompt');
+            if (! is_string($prompt)) {
+                return response()->json(['message' => __('A text message is required.')], 422);
+            }
             // if ($chat->category->prompt_prefix != null && !str_starts_with($chat->category->slug, 'ai_')) {
             //     $prompt = "You will now play a character and respond as that character (You will never break character). Your name is". $chat->category->human_name. ". I want you to act as a". $chat->category->role . ". ". $chat->category->prompt_prefix . ' ' . $prompt;
             // }
@@ -1138,6 +1327,10 @@ class AIChatController extends Controller
         }
         if ($request->isMethod('get')) {
             $type = $request->get('type');
+            $message = $chat->messages()->whereKey($request->get('message_id'))->first();
+            if (! $message) {
+                return response()->json(['message' => __('Message not found.')], 404);
+            }
             if ($chat->category->slug === 'ai_pdf') {
                 return $this->pdfStream($request);
             }
@@ -1175,7 +1368,7 @@ class AIChatController extends Controller
         $history = [];
 
         if (setting('default_ai_engine', EngineEnum::OPEN_AI->value) === EngineEnum::ANTHROPIC->value) {
-            $chat_bot = setting('anthropic_default_model', EntityEnum::CLAUDE_3_OPUS->value);
+            $chat_bot = setting('anthropic_default_model', EntityEnum::CLAUDE_OPUS_4_8->value);
         }
 
         $chat = UserOpenaiChat::whereId($chat_id)->first();
@@ -1921,7 +2114,7 @@ class AIChatController extends Controller
                     }
 
                     if (setting('anthropic_default_model') === BedrockEngine::BEDROCK->value) {
-                        $responseBody = $this->bedrockService->invokeClaude($content);
+                        $responseBody = $this->bedrockService()->invokeClaude($content);
                         $completion = $responseBody['completion'];
                         foreach (explode("\n", $completion) as $chunk) {
                             $words = explode(' ', $chunk);
@@ -2051,7 +2244,7 @@ class AIChatController extends Controller
                 }
 
                 if (setting('anthropic_default_model') === BedrockEngine::BEDROCK->value) {
-                    $responseBody = $this->bedrockService->invokeClaude($content);
+                    $responseBody = $this->bedrockService()->invokeClaude($content);
                     $completion = $responseBody['completion'];
                     foreach (explode("\n", $completion) as $chunk) {
                         $words = explode(' ', $chunk);
@@ -2129,9 +2322,9 @@ class AIChatController extends Controller
             $message->hash = Str::random(256);
             $message->credits = $total_used_tokens;
             $message->words = 0;
-            $message->images = implode(',', $images);
-            $message->pdfName = $request->pdfname;
-            $message->pdfPath = $request->pdfpath;
+            $message->images = ChatAttachmentReferences::normalize($images);
+            $message->pdfName = ChatAttachmentReferences::normalize($request->input('pdfname'));
+            $message->pdfPath = ChatAttachmentReferences::normalize($request->input('pdfpath'));
             $message->save();
             $driver
                 ->input($responsedText)
@@ -2159,6 +2352,15 @@ class AIChatController extends Controller
      */
     public function chatbotOutput(Request $request): StreamedResponse|JsonResponse
     {
+        $chat = UserOpenaiChat::query()
+            ->whereKey($request->input('chat_id'))
+            ->where('user_id', Auth::id())
+            ->where('is_chatbot', 1)
+            ->first();
+        if (! $chat) {
+            return response()->json(['message' => __('Chat not found.')], 404);
+        }
+
         $chatbot = Chatbot::where('id', $this->settings_two->chatbot_template)->firstOrFail();
 
         if ($request->isMethod('get')) {
@@ -2461,9 +2663,9 @@ class AIChatController extends Controller
                 $message->hash = Str::random(256);
                 $message->credits = $total_used_tokens;
                 $message->words = 0;
-                $message->images = implode(',', $images);
-                $message->pdfName = $request->pdfname;
-                $message->pdfPath = $request->pdfpath;
+                $message->images = ChatAttachmentReferences::normalize($images);
+                $message->pdfName = ChatAttachmentReferences::normalize($request->input('pdfname'));
+                $message->pdfPath = ChatAttachmentReferences::normalize($request->input('pdfpath'));
                 $message->save();
                 $driver
                     ->input($responsedText)
@@ -2505,7 +2707,9 @@ class AIChatController extends Controller
         $db_ip_address->last_attempt_at = now();
         $db_ip_address->save();
 
-        $chat = UserOpenaiChat::where('id', $request->chat_id)->first();
+        if (! is_string($request->input('prompt'))) {
+            return response()->json(['message' => __('A text message is required.')], 422);
+        }
         $realtime = $request->realtime;
         $user = Auth::user();
         $total_used_tokens = 0;
@@ -2530,51 +2734,259 @@ class AIChatController extends Controller
         return response()->json(compact('chat_id', 'message_id'));
     }
 
-    public function transAudio(Request $request): JsonResponse
+    private function voiceCreditsUnavailableMessage(): string
     {
-        $user = Auth::user();
-        $driver = EntityFacade::driver(EntityEnum::WHISPER_1);
-        $driver->redirectIfNoCreditBalance();
+        return __('Voice is unavailable because your current Garad plan has no Whisper/STT credits remaining. Upgrade your plan or add credits to continue.');
+    }
 
-        $file = $request->file('file');
-        $path = 'uploads/audio/';
-        $file_name = Str::random(4) . '-' . Str::slug($user?->fullName()) . '-audio.' . $file->guessExtension();
+    private function isChatVoiceRequest(Request $request): bool
+    {
+        return trim((string) $request->input('voice_context', '')) === 'chat_voice';
+    }
 
-        // Audio Extension Control
-        $imageTypes = ['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm'];
-        if (! in_array(Str::lower($file->guessExtension()), $imageTypes)) {
-            $data = [
-                'errors' => ['Invalid extension, accepted extensions are mp3, mp4, mpeg, mpga, m4a, wav, and webm.'],
-            ];
+    private function resolveVoiceTranscriptionBillingDriver(Request $request, User $user, string $inputText)
+    {
+        $defaultDriver = EntityFacade::driverForUser($user, EntityEnum::WHISPER_1)
+            ->input($inputText)
+            ->calculateCredit();
 
-            return response()->json($data, 419);
+        if (! $this->isChatVoiceRequest($request)) {
+            return $defaultDriver;
         }
 
-        try {
+        $realtimeDriver = EntityFacade::driverForUser($user, EntityEnum::GPT_REALTIME)
+            ->input($inputText)
+            ->calculateCredit();
+        if ($realtimeDriver->hasCreditBalanceForInput()) {
+            return $realtimeDriver;
+        }
 
-            $file->move($path, $file_name);
+        $reasoningModelId = trim((string) $request->input('reasoning_model', ''));
+        $reasoningModel = EntityEnum::tryFrom($reasoningModelId);
+        if ($reasoningModel) {
+            $reasoningDriver = EntityFacade::driverForUser($user, $reasoningModel)
+                ->input($inputText)
+                ->calculateCredit();
+
+            if ($reasoningDriver->hasCreditBalanceForInput()) {
+                return $reasoningDriver;
+            }
+        }
+
+        return $defaultDriver;
+    }
+
+    public function voiceStatus(): JsonResponse
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json([
+                'available' => false,
+                'reason' => 'plan',
+                'message' => __('Please sign in to use Garad Voice.'),
+            ], 401);
+        }
+
+        $reasoningModelId = trim((string) request()->query('reasoning_model', ''));
+        $requestedReasoningModel = EntityEnum::tryFrom($reasoningModelId);
+        $voiceMetadata = [
+            'reasoningModelId' => $reasoningModelId,
+            'reasoningModelName' => $reasoningModelId,
+            'reasoningProvider' => '',
+            'transcriptionModel' => EntityEnum::WHISPER_1->value,
+        ];
+
+        try {
+            $reasoningModelRecords = Entity::query()
+                ->isEnabled()
+                ->whereHas('tokens', fn ($query) => $query->where('type', 'word'))
+                ->get();
+
+            $reasoningModelMap = $reasoningModelRecords->keyBy(
+                function ($record) {
+                    $key = $record->key;
+
+                    return $key instanceof EntityEnum ? $key->value : (string) $key;
+                }
+            );
+
+            $candidateModels = collect();
+            if ($requestedReasoningModel) {
+                $candidateModels->push($requestedReasoningModel);
+            }
+            $candidateModels = $candidateModels
+                ->merge(
+                    $reasoningModelRecords
+                        ->map(function ($record) {
+                            $key = $record->key;
+                            $value = $key instanceof EntityEnum ? $key->value : (string) $key;
+
+                            return EntityEnum::tryFrom($value);
+                        })
+                        ->filter()
+                )
+                ->unique(fn (EntityEnum $model) => $model->value)
+                ->values();
+
+            $resolvedReasoningModel = null;
+            $resolvedReasoningModelRecord = null;
+            foreach ($candidateModels as $candidateModel) {
+                $candidateRecord = $reasoningModelMap->get($candidateModel->value);
+                if (! $candidateRecord) {
+                    continue;
+                }
+                $resolvedReasoningModel = $candidateModel;
+                $resolvedReasoningModelRecord = $candidateRecord;
+                break;
+            }
+
+            if (! $resolvedReasoningModel || ! $resolvedReasoningModelRecord) {
+                return response()->json([
+                    'available' => false,
+                    'reason' => $user->activePlan() ? 'credits' : 'plan',
+                    'message' => __('Voice is temporarily unavailable for this account right now.'),
+                    ...$voiceMetadata,
+                ], 419);
+            }
+
+            $voiceMetadata['reasoningModelId'] = $resolvedReasoningModel->value;
+            $voiceMetadata['reasoningModelName'] =
+                trim((string) ($resolvedReasoningModelRecord->selected_title ?: $resolvedReasoningModelRecord->title))
+                ?: $resolvedReasoningModel->value;
+            $voiceMetadata['reasoningProvider'] = $resolvedReasoningModel->engine()->label();
+
+            return response()->json([
+                'available' => true,
+                'reason' => null,
+                'message' => __('Garad Voice is ready.'),
+                ...$voiceMetadata,
+            ]);
+        } catch (Throwable $e) {
+            Log::error('Garad voice access check failed.', [
+                'user_id' => $user->id,
+                'reasoning_model' => $reasoningModelId,
+                'exception' => get_class($e),
+                'message' => Str::limit($e->getMessage(), 500),
+            ]);
+
+            return response()->json([
+                'available' => false,
+                'reason' => 'plan',
+                'message' => __('Garad Voice access could not be verified. Please try again.'),
+                ...$voiceMetadata,
+            ], 503);
+        }
+    }
+
+    public function transAudio(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'max:25600', 'mimes:mp3,mp4,mpeg,mpga,m4a,wav,webm'],
+        ]);
+        $user = Auth::user();
+        if (! $user) {
+            return response()->json(['message' => __('Please sign in to use voice transcription.')], 401);
+        }
+
+        $stream = null;
+        $audioPath = null;
+
+        try {
+            $driver = EntityFacade::driverForUser($user, EntityEnum::WHISPER_1);
+            if (! $this->isChatVoiceRequest($request)) {
+                $driver->redirectIfNoCreditBalance();
+            }
+
+            $realPath = $validated['file']->getRealPath();
+            if (! $realPath) {
+                throw new RuntimeException('The uploaded audio file is unavailable.');
+            }
+
+            $extension = strtolower((string) $validated['file']->guessExtension());
+            if (! in_array($extension, ['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm'], true)) {
+                throw new RuntimeException('The uploaded audio file extension is not supported.');
+            }
+
+            $temporaryPath = tempnam(sys_get_temp_dir(), 'garad-voice-');
+            if ($temporaryPath === false) {
+                throw new RuntimeException('A temporary audio file could not be created.');
+            }
+
+            $audioPath = $temporaryPath . '.' . $extension;
+            if (! rename($temporaryPath, $audioPath)) {
+                $audioPath = $temporaryPath;
+                throw new RuntimeException('A temporary audio file could not be named.');
+            }
+            if (! copy($realPath, $audioPath)) {
+                throw new RuntimeException('The uploaded audio file could not be prepared.');
+            }
+
+            $stream = fopen($audioPath, 'rb');
+            if ($stream === false) {
+                throw new RuntimeException('The uploaded audio file could not be opened.');
+            }
+
             $response = OpenAI::audio()->transcribe([
-                'file'            => fopen($path . $file_name, 'rb'),
+                'file'            => $stream,
                 'model'           => $driver->enum()->value,
                 'response_format' => 'verbose_json',
             ]);
 
-            unlink($path . $file_name);
-            $text = $response->text;
-            $driver->input($text)->calculateCredit()->decreaseCredit();
-            Usage::getSingle()->updateWordCounts($driver->calculate());
+            $text = trim((string) $response->text);
+            if ($text === '') {
+                return response()->json(['message' => __('No speech was recognized. Please try again.')], 422);
+            }
 
-        } catch (Exception $e) {
-            $text = '';
+            $billingDriver = $this->resolveVoiceTranscriptionBillingDriver($request, $user, $text);
+            if (! $billingDriver->hasCreditBalanceForInput() || ! $billingDriver->decreaseCredit()) {
+                return response()->json([
+                    'message' => $this->voiceCreditsUnavailableMessage(),
+                    'reason' => 'credits',
+                ], 419);
+            }
+
+            Usage::getSingle()->updateWordCounts($billingDriver->calculate());
+
+            return response()->json($text);
+        } catch (Throwable $e) {
+            if ($e->getCode() === 419) {
+                return response()->json([
+                    'message' => $this->voiceCreditsUnavailableMessage(),
+                    'reason' => 'credits',
+                    'status' => 'error',
+                ], 419);
+            }
+
+            Log::error('Garad voice transcription failed.', [
+                'user_id' => $user->id,
+                'exception' => get_class($e),
+                'message' => Str::limit($e->getMessage(), 500),
+            ]);
+
+            return response()->json(['message' => __('Speech transcription failed. Please try again.')], 502);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+            if (is_string($audioPath) && is_file($audioPath) && ! unlink($audioPath)) {
+                Log::warning('Could not remove the temporary Garad voice audio file.', [
+                    'user_id' => $user->id,
+                ]);
+            }
         }
-
-        return response()->json($text);
     }
 
     public function deleteChat(Request $request): JsonResponse
     {
-        $chat_id = explode('_', $request->chat_id)[1];
-        $chat = UserOpenaiChat::where('id', $chat_id)->first();
+        $validated = $request->validate([
+            'chat_id' => ['required', 'regex:/^(chat_)?[0-9]+$/'],
+        ]);
+        $chatId = (int) preg_replace('/^chat_/', '', $validated['chat_id']);
+        $chat = UserOpenaiChat::query()
+            ->whereKey($chatId)
+            ->where('user_id', Auth::id())
+            ->where('is_chatbot', 0)
+            ->firstOrFail();
         $chat->delete();
 
         return response()->json([
@@ -2611,12 +3023,18 @@ class AIChatController extends Controller
 
     public function renameChat(Request $request): JsonResponse
     {
-        $chat_id = explode('_', $request->chat_id)[1];
-        $chat = UserOpenaiChat::where('id', $chat_id)->first();
-        if ($chat) {
-            $chat->title = $request->title;
-            $chat->save();
-        }
+        $validated = $request->validate([
+            'chat_id' => ['required', 'regex:/^(chat_)?[0-9]+$/'],
+            'title'   => 'required|string|max:255',
+        ]);
+        $chatId = (int) preg_replace('/^chat_/', '', $validated['chat_id']);
+        $chat = UserOpenaiChat::query()
+            ->whereKey($chatId)
+            ->where('user_id', Auth::id())
+            ->where('is_chatbot', 0)
+            ->firstOrFail();
+        $chat->title = trim($validated['title']);
+        $chat->save();
 
         return response()->json([
             'success' => true,
@@ -2627,12 +3045,18 @@ class AIChatController extends Controller
 
     public function pinConversation(Request $request): JsonResponse
     {
-        $chat_id = explode('_', $request->chat_id)[1];
-        $chat = UserOpenaiChat::where('id', $chat_id)->first();
-        if ($chat) {
-            $chat->is_pinned = $request->pinned;
-            $chat->save();
-        }
+        $validated = $request->validate([
+            'chat_id' => ['required', 'regex:/^(chat_)?[0-9]+$/'],
+            'pinned'  => 'required|boolean',
+        ]);
+        $chatId = (int) preg_replace('/^chat_/', '', $validated['chat_id']);
+        $chat = UserOpenaiChat::query()
+            ->whereKey($chatId)
+            ->where('user_id', Auth::id())
+            ->where('is_chatbot', 0)
+            ->firstOrFail();
+        $chat->is_pinned = (bool) $validated['pinned'];
+        $chat->save();
 
         return response()->json([
             'success' => true,
@@ -2644,7 +3068,15 @@ class AIChatController extends Controller
     // Low
     public function lowChatSave(Request $request): JsonResponse
     {
-        $chat = UserOpenaiChat::find($request->chat_id);
+        $chat = $this->openai($request)->with('category')->whereKey($request->input('chat_id'))->first();
+        if (! $chat) {
+            return response()->json(['message' => __('Chat not found.')], 404);
+        }
+
+        $validated = $request->validate([
+            'input' => ['nullable', 'string'],
+            'response' => ['required', 'string'],
+        ]);
         $chat_bot = EntityEnum::fromSlug(empty($request->model) ? $this->settings?->openai_default_model : $request->model) ?? EntityEnum::GPT_5_MINI;
 
         if (! empty($chat->category->slug) && $chat->category->slug === 'ai_chat_image') {
@@ -2652,7 +3084,7 @@ class AIChatController extends Controller
             $driver = EntityFacade::driver($chat_bot)->inputImageCount(1);
             Usage::getSingle()->updateImageCounts($driver->calculate());
         } else {
-            $driver = EntityFacade::driver($chat_bot)->input($request?->response ?? '');
+            $driver = EntityFacade::driver($chat_bot)->input($validated['response']);
             Usage::getSingle()->updateWordCounts($driver->calculate());
         }
 
@@ -2670,16 +3102,16 @@ class AIChatController extends Controller
         $message = new UserOpenaiChatMessage;
         $message->user_openai_chat_id = $chat?->id;
         $message->user_id = Auth::id();
-        $message->input = $request->input;
-        $message->response = $request->response;
-        $message->output = $request->response;
+        $message->input = $validated['input'] ?? null;
+        $message->response = $validated['response'];
+        $message->output = $validated['response'];
         $message->hash = Str::random(256);
-        $message->credits = countWords($request->response);
-        $message->words = countWords($request->response);
-        $message->images = $request->images;
-        $message->pdfPath = $request->pdfPath;
-        $message->pdfName = $request->pdfName;
-        $message->outputImage = $request->outputImage;
+        $message->credits = countWords($validated['response']);
+        $message->words = countWords($validated['response']);
+        $message->images = ChatAttachmentReferences::normalize($request->input('images'));
+        $message->pdfPath = ChatAttachmentReferences::normalize($request->input('pdfPath'));
+        $message->pdfName = ChatAttachmentReferences::normalize($request->input('pdfName'));
+        $message->outputImage = ChatAttachmentReferences::normalize($request->input('outputImage'));
         $message->save();
 
         $driver->calculateCredit()->decreaseCredit();
@@ -2696,8 +3128,8 @@ class AIChatController extends Controller
         $streamed_message_id = $request->streamed_message_id;
         $message = UserOpenaiChatMessage::whereId($streamed_message_id)->first();
         $chat_id = $message?->user_openai_chat_id;
-        $chat = UserOpenaiChat::whereId($chat_id)->first();
-        if ($chat) {
+        $chat = $chat_id ? $this->openai($request)->whereKey($chat_id)->first() : null;
+        if ($chat && $message && (int) $message->user_openai_chat_id === (int) $chat->id) {
             if ($chat->messages()->count() <= 2) {
                 $systemPrompt = $this->applyPromptRules('You are a chatbot. Generate a title for a chat based on provided conversation. You must return a title only.');
                 $userContent = "Generate a title for a chat based on the following conversation: \n\n\n\n\n"
@@ -2719,6 +3151,15 @@ class AIChatController extends Controller
         return ApiHelper::setOpenAiKey();
     }
 
+    private function bedrockService(): BedrockRuntimeService
+    {
+        if ($this->bedrockService === null) {
+            $this->bedrockService = app(BedrockRuntimeService::class);
+        }
+
+        return $this->bedrockService;
+    }
+
     private function applyPromptRules(string $prompt): string
     {
         $prompt .= '
@@ -2731,13 +3172,7 @@ class AIChatController extends Controller
 
     private function getDefaultOpenAiImageModel(): EntityEnum
     {
-        $default = match ($this->settings_two->dalle) {
-            'dalle3' => EntityEnum::DALL_E_3->slug(),
-            'dalle2' => EntityEnum::DALL_E_2->slug(),
-            default  => $this->settings_two->dalle,
-        };
-
-        return EntityEnum::fromSlug($default) ?? EntityEnum::DALL_E_2;
+        return DefaultOpenAiImageModel::resolve($this->settings_two);
     }
 
     // file upload bug fixed

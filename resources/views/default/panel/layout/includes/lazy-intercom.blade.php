@@ -4,7 +4,7 @@
 
     <script>
         (() => {
-            fetch('/vip-intercom-partial')
+            fetch('{{ url('/vip-intercom-partial') }}')
                 .then(response => response.text())
                 .then(html => {
                     const container = document.getElementById('vip-intercom-container');

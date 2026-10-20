@@ -15,14 +15,27 @@ class ScheduleTrigger implements TriggerInterface
     public function shouldFire(AIAgentWorkflow $workflow): bool
     {
         $config = $workflow->trigger_config ?? [];
-        $cron = $config['cron'] ?? null;
-$cron = is_string($cron) ? trim($cron) : $cron;
+        if (! empty($config['run_once_at'])) {
+            if ($workflow->last_run_at !== null) {
+                return false;
+            }
 
-if (empty($cron) || ! CronExpression::isValidExpression($cron)) {
-    return false;
-}
-        // Never ran or next_run_at is in the past
-        if ($workflow->next_run_at === null || $workflow->next_run_at->isPast()) {
+            try {
+                return Carbon::parse(
+                    (string) $config['run_once_at'],
+                    (string) ($config['timezone'] ?? config('app.timezone', 'UTC')),
+                )->lessThanOrEqualTo(now());
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
+        $cron = $config['cron'] ?? null;
+        $cron = is_string($cron) ? trim($cron) : $cron;
+        if (empty($cron) || ! CronExpression::isValidExpression($cron)) {
+            return false;
+        }
+        if ($workflow->next_run_at === null || $workflow->next_run_at->lessThanOrEqualTo(now())) {
             return true;
         }
 
@@ -62,10 +75,15 @@ if (empty($cron) || ! CronExpression::isValidExpression($cron)) {
     /**
      * Calculate the next fire time from a cron expression.
      */
-    public function nextRunAt(string $cron): Carbon
+    public function nextRunAt(string $cron, ?string $timezone = null): Carbon
     {
         $expression = new CronExpression($cron);
 
-        return Carbon::instance($expression->getNextRunDate());
+        return Carbon::instance($expression->getNextRunDate(
+            'now',
+            0,
+            false,
+            $timezone ?: config('app.timezone', 'UTC'),
+        ));
     }
 }

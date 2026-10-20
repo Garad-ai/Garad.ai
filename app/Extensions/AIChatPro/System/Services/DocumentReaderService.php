@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Extensions\AIChatPro\System\Services;
 
+use App\Extensions\AIChatPro\System\Readers\AudioVideoReader;
 use App\Extensions\AIChatPro\System\Readers\ExcelReader;
 use App\Extensions\AIChatPro\System\Readers\ImageReader;
 use App\Extensions\AIChatPro\System\Readers\PdfReader;
@@ -22,6 +23,7 @@ class DocumentReaderService
         private readonly PowerPointReader $powerPointReader = new PowerPointReader,
         private readonly TextReader $textReader = new TextReader,
         private readonly ImageReader $imageReader = new ImageReader,
+        private readonly AudioVideoReader $audioVideoReader = new AudioVideoReader,
     ) {}
 
     public function readUploadedFile(UploadedFile $file): array
@@ -69,6 +71,8 @@ class DocumentReaderService
             'ppt', 'pptx' => $this->powerPointReader->read($path, $extension),
             'txt', 'csv', 'json', 'xml', 'html', 'htm', 'md', 'markdown' => $this->textReader->read($path, $extension),
             'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp' => $this->imageReader->read($path, $originalName),
+            'mp3', 'mpeg', 'mpga', 'm4a', 'wav', 'ogg', 'flac', 'aac',
+            'mp4', 'mov', 'mkv', 'avi', 'm4v', 'webm' => $this->audioVideoReader->read($path, $originalName, $extension),
             default => throw new InvalidArgumentException('Unsupported document format: ' . $extension),
         };
     }

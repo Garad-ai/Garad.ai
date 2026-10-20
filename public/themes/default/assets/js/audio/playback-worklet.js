@@ -26,7 +26,6 @@ class PlaybackWorklet extends AudioWorkletProcessor {
 			channel.set(this.buffer.map((v) => v / 32768));
 			this.buffer = [];
 		}
-
 		return true;
 	}
 }

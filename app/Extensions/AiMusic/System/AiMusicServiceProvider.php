@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Extensions\AiMusic\System;
 
 use App\Extensions\AiMusic\System\Http\Controllers\AiMusicController;
+use App\Extensions\AiMusic\System\Http\Controllers\AudioStudioController;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +57,8 @@ class AiMusicServiceProvider extends ServiceProvider
                         $router->prefix('user')
                             ->name('user.')
                             ->group(function (Router $router) {
+                                $router->get('ai-audio/history', [AudioStudioController::class, 'history']);
+                                $router->delete('ai-audio/music/{id}', [AudioStudioController::class, 'deleteSong'])->whereNumber('id');
                                 $router->resource('ai-music', AiMusicController::class)->except('destroy', 'show');
                                 $router->get('ai-music-delete/{id}', [AiMusicController::class, 'delete'])->name('ai-music.delete');
                                 $router->get('ai-music-check', [AiMusicController::class, 'checkVideoStatus'])->name('ai-music.check');

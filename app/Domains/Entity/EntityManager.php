@@ -102,7 +102,7 @@ class EntityManager extends Manager
 
         return match ($defaultEngine) {
             EngineEnum::OPEN_AI->slug()    => EntityEnum::fromSlug($setting?->openai_default_model ?? EntityEnum::GPT_5_MINI->slug()),
-            EngineEnum::ANTHROPIC->slug()  => EntityEnum::fromSlug(setting('anthropic_default_model', EntityEnum::ANTHROPIC_CLAUDE_3_5_HAIKU->slug())),
+            EngineEnum::ANTHROPIC->slug()  => EntityEnum::fromSlug(setting('anthropic_default_model', EntityEnum::CLAUDE_HAIKU_4_5->slug())),
             EngineEnum::GEMINI->slug()     => EntityEnum::fromSlug(setting('gemini_default_model', EntityEnum::GEMINI_3_FLASH->slug())),
             default                        => EntityEnum::GPT_5_MINI,
         };

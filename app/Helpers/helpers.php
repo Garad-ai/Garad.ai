@@ -246,7 +246,7 @@ if (! function_exists('custom_theme_url')) {
     function custom_theme_url($url, $slash = false)
     {
         if (strpos($url, 'assets') !== false) {
-            return theme_url($url);
+            return rtrim((string) config('app.asset_url', '/'), '/') . '/' . ltrim(theme_url($url), '/');
         }
         if ($slash) {
             return '/' . $url;
@@ -1564,33 +1564,48 @@ function convertHistoryToGemini($history): array
                 'role' => $role,
             ];
         } elseif (is_array($content)) {
-            $isImage = (bool) array_filter($content, function ($item) {
-                return isset($item['type']) && $item['type'] === 'image_url';
-            });
+            $convertedItem = [
+                'parts' => [],
+                'role' => $role,
+            ];
 
-            if ($isImage) {
-                $convertedItem = [
-                    'parts' => [],
-                ];
-
-                foreach ($content as $contentItem) {
-
-                    if ($contentItem['type'] === 'text') {
-                        $convertedItem['parts'][] = [
-                            'text' => $item['text'],
-                        ];
-                    } elseif ($contentItem['type'] === 'image_url') {
-                        $convertedItem['parts'][] = [
-                            'inline_data' => [
-                                'mime_type' => extractMimeType($contentItem['image_url']['url']),
-                                'data'      => extractBase64ImageData($contentItem['image_url']['url']),
-                            ],
-                        ];
-                    }
-
+            foreach ($content as $contentItem) {
+                if (! is_array($contentItem)) {
+                    continue;
                 }
 
+                $type = $contentItem['type'] ?? null;
+                if ($type === 'text' || $type === 'input_text') {
+                    $text = $contentItem['text'] ?? null;
+                    if (is_string($text)) {
+                        $convertedItem['parts'][] = ['text' => $text];
+                    }
+                } elseif ($type === 'image_url' || $type === 'input_image') {
+                    $imageUrl = $contentItem['image_url'] ?? $contentItem['url'] ?? null;
+                    if (is_array($imageUrl)) {
+                        $imageUrl = $imageUrl['url'] ?? null;
+                    }
+
+                    $mimeType = is_string($imageUrl) ? extractMimeType($imageUrl) : null;
+                    $imageData = is_string($imageUrl) ? extractBase64ImageData($imageUrl) : null;
+                    if (! $mimeType || ! $imageData) {
+                        throw new InvalidArgumentException('Gemini image attachments must be valid base64 image data URLs.');
+                    }
+
+                    $convertedItem['parts'][] = [
+                        'inline_data' => [
+                            'mime_type' => $mimeType,
+                            'data' => $imageData,
+                        ],
+                    ];
+                }
             }
+
+            if ($convertedItem['parts'] === []) {
+                throw new InvalidArgumentException('Gemini received an unsupported structured message.');
+            }
+        } else {
+            throw new InvalidArgumentException('Gemini received an unsupported message content format.');
         }
 
         $convertedHistory[] = $convertedItem;
@@ -1626,7 +1641,7 @@ function extractMimeType($data)
 function extractBase64ImageData($dataURI)
 {
     // JPEG veya PNG için MIME türlerini destekleyen regex deseni
-    $pattern = '/^data:image\/(?:jpeg|png);base64,/';
+    $pattern = '/^data:image\/(?:jpeg|png|webp|gif);base64,/';
     if (preg_match($pattern, $dataURI, $matches)) {
         // Regex ile başlık bulunursa, başlığı atıp sadece Base64 verisini döndür
         return substr($dataURI, strlen($matches[0]));

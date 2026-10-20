@@ -107,7 +107,7 @@ class Google2FAController extends Controller
     {
         $request->validate([
             'one_time_password' => 'required|digits:6',
-            'user_id'           => 'required',
+            'user_id'           => 'sometimes',
         ]);
 
         $userId = session('user_id');
@@ -127,10 +127,20 @@ class Google2FAController extends Controller
             ])->redirectTo(route('login'));
         }
 
-        Auth::login($user);
+        Auth::login($user, $request->session()->pull('garad_remember_login', false));
+        $request->session()->regenerate();
 
         session()->put('save_login_2fa', true);
         session()->save();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'link' => $request->session()->pull(
+                    'garad_auth_redirect',
+                    $user->isAdmin() ? RouteServiceProvider::HOME : '/chat',
+                ),
+            ]);
+        }
 
         return redirect(RouteServiceProvider::HOME);
     }

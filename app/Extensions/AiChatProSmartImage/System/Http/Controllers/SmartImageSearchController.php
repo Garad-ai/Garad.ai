@@ -6,6 +6,7 @@ namespace App\Extensions\AiChatProSmartImage\System\Http\Controllers;
 
 use App\Extensions\AiChatProSmartImage\System\Services\ImageSearchService;
 use App\Extensions\AiChatProSmartImage\System\Services\SmartImageService;
+use App\Models\UserOpenaiChatMessage;
 use App\Models\SettingTwo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,14 @@ class SmartImageSearchController extends Controller
 
         $query = $request->input('query');
         $messageId = $request->input('message_id');
+        if ($messageId) {
+            UserOpenaiChatMessage::query()
+                ->whereKey($messageId)
+                ->whereHas('chat', fn ($chat) => $chat->where('user_id', Auth::id()))
+                ->firstOrFail();
+        }
+        abort_unless(SmartImageService::isEnabled(), 403, 'Smart image search is not available for this account.');
+
         $maxImages = SmartImageService::getMaxImages();
         $provider = setting('default_realtime', 'serper');
 

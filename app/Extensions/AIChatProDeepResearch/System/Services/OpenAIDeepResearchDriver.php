@@ -91,10 +91,12 @@ class OpenAIDeepResearchDriver
                             $annotation = (array) $annotation;
                         }
 
-                        if (isset($annotation['url'])) {
+                        $url = $annotation['url'] ?? null;
+
+                        if ($this->isSafeSourceUrl($url)) {
                             $sources[] = [
                                 'title' => $annotation['title'] ?? '',
-                                'url'   => $annotation['url'],
+                                'url'   => $url,
                             ];
                         }
                     }
@@ -103,6 +105,15 @@ class OpenAIDeepResearchDriver
         }
 
         return collect($sources)->unique('url')->values()->toArray();
+    }
+
+    private function isSafeSourceUrl(mixed $url): bool
+    {
+        if (! is_string($url) || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+
+        return in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true);
     }
 
     public function countSearches(array $output): int

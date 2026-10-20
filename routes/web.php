@@ -28,7 +28,7 @@ Route::get('/speaker', function () {
 
 Route::get('/speaker/admin', function () {
     return view('speaker.admin');
-})->name('speaker.admin');
+})->middleware(['auth', 'admin.role'])->name('speaker.admin');
 
 
 
@@ -95,6 +95,7 @@ Route::get('plan/private/subscription/{key}', [PrivatePlanController::class, 'in
 Route::get('confirm/email/{email_confirmation_code}', [MailController::class, 'emailConfirmationMail']);
 
 Route::controller(InstallationController::class)
+    ->middleware(['auth', 'admin.role'])
     ->group(static function () {
         Route::get('upgrade-script', 'upgrade')->withoutMiddleware(ApplicationStatus::class)->name('upgrade-script');
         Route::get('update-manual/{pass?}', 'updateManual')->withoutMiddleware(ApplicationStatus::class)->name('update-manual');
@@ -104,10 +105,14 @@ Route::controller(InstallationController::class)
 
     });
 
-Route::get('clear-log', [ClearController::class, 'clearLog'])->name('clearLog');
-Route::get('cache-clear', [ClearController::class, 'cacheClear'])->name('cache.clear');
-Route::get('update-fonts', [FontsController::class, 'updateFontsCache']);
-Route::get('debug/{token?}', DebugModeController::class)->name('debug');
+Route::middleware(['auth', 'admin.role'])->group(static function () {
+    Route::get('clear-log', [ClearController::class, 'clearLog'])->name('clearLog');
+    Route::get('cache-clear', [ClearController::class, 'cacheClear'])->name('cache.clear');
+    Route::get('update-fonts', [FontsController::class, 'updateFontsCache']);
+});
+Route::get('debug/{token?}', DebugModeController::class)
+    ->middleware(['auth', 'admin.role'])
+    ->name('debug');
 Route::get('sys/{tk}', [SystemSlotController::class, 'index'])->middleware(['auth', 'admin', 'throttle:10,1']);
 Route::post('sys/{slot}', [SystemSlotController::class, 'record'])->middleware(['auth', 'admin', 'throttle:10,1']);
 Route::get('check-subscription-end', CheckSubscriptionEndController::class)->name('check-subscription-end');
@@ -127,3 +132,12 @@ if (file_exists(base_path('routes/custom_routes_web.php'))) {
 require __DIR__ . '/auth.php';
 require __DIR__ . '/panel.php';
 require __DIR__ . '/webhooks.php';
+
+
+Route::get('/sso/staging-chat', [\App\Http\Controllers\StagingChatSsoController::class, 'handle'])
+    ->name('sso.staging-chat');
+
+
+
+Route::get('/sso/staging-chat/logout', [\App\Http\Controllers\StagingChatSsoController::class, 'logout'])
+    ->name('sso.staging-chat.logout');

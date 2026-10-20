@@ -21,32 +21,43 @@ class AiCompletionService
         return $this->complete('You are a helpful assistant.', $userContent, $engine);
     }
 
-    public function complete(string $systemPrompt, string $userContent, ?EngineEnum $engine = null): string
+    public function complete(
+        string $systemPrompt,
+        string $userContent,
+        ?EngineEnum $engine = null,
+        ?string $model = null,
+    ): string
     {
         $engine ??= Helper::defaultEngine();
 
         return match ($engine) {
-            EngineEnum::ANTHROPIC => $this->viaAnthropic($systemPrompt, $userContent),
-            EngineEnum::GEMINI    => $this->viaGemini($systemPrompt, $userContent, $engine),
-            EngineEnum::DEEP_SEEK => $this->viaDeepSeek($systemPrompt, $userContent, $engine),
-            EngineEnum::X_AI      => $this->viaXAi($systemPrompt, $userContent, $engine),
-            default               => $this->viaOpenAi($systemPrompt, $userContent),
+            EngineEnum::ANTHROPIC => $this->viaAnthropic($systemPrompt, $userContent, $model),
+            EngineEnum::GEMINI    => $this->viaGemini($systemPrompt, $userContent, $engine, $model),
+            EngineEnum::DEEP_SEEK => $this->viaDeepSeek($systemPrompt, $userContent, $engine, $model),
+            EngineEnum::X_AI      => $this->viaXAi($systemPrompt, $userContent, $engine, $model),
+            default               => $this->viaOpenAi($systemPrompt, $userContent, $model),
         };
     }
 
-    private function viaOpenAi(string $systemPrompt, string $userContent): string
+    private function viaOpenAi(string $systemPrompt, string $userContent, ?string $model = null): string
     {
         ApiHelper::setOpenAiKey();
 
-        $model = Helper::defaultWordModel();
+        $model ??= Helper::defaultWordModel()->value;
 
-        $result = OpenAI::responses()->create([
-            'model' => $model->value,
+        $payload = [
+            'model' => $model,
             'input' => [
                 ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user', 'content' => $userContent],
             ],
-        ]);
+        ];
+        if (request()?->attributes->has('garad_provider_request_max')) {
+            $payload['max_output_tokens'] = ProviderRequestBudgetService::MAX_OUTPUT_TOKENS;
+        }
+        $payload = app(ProviderRequestBudgetService::class)->preparePayload($payload);
+        app(ProviderRequestBudgetService::class)->recordProviderRequest();
+        $result = OpenAI::responses()->create($payload);
 
         return collect($result['output'] ?? [])
             ->flatMap(fn ($item) => $item['content'] ?? [])
@@ -54,11 +65,12 @@ class AiCompletionService
             ->implode('');
     }
 
-    private function viaAnthropic(string $systemPrompt, string $userContent): string
+    private function viaAnthropic(string $systemPrompt, string $userContent, ?string $model = null): string
     {
         $client = app(AnthropicService::class);
 
         $response = $client
+            ->setModel($model ?? setting('anthropic_default_model'))
             ->setSystem($systemPrompt)
             ->setMessages([
                 ['role' => 'user', 'content' => $userContent],
@@ -74,17 +86,24 @@ class AiCompletionService
             ->implode('');
     }
 
-    private function viaGemini(string $systemPrompt, string $userContent, EngineEnum $engine): string
+    private function viaGemini(
+        string $systemPrompt,
+        string $userContent,
+        EngineEnum $engine,
+        ?string $model = null,
+    ): string
     {
-        $model = $engine->getDefaultWordModel(null);
+        $model ??= $engine->getDefaultWordModel(null)->value;
 
         $client = app(GeminiService::class);
-
         $response = $client
             ->setHistory([
                 ['role' => 'user', 'parts' => [['text' => $systemPrompt . "\n\n" . $userContent]]],
             ])
-            ->generateContent($model->value);
+            ->setGenerationConfig(request()?->attributes->has('garad_provider_request_max')
+                ? ['maxOutputTokens' => ProviderRequestBudgetService::MAX_OUTPUT_TOKENS]
+                : [])
+            ->generateContent($model);
 
         $body = $response->json();
 
@@ -95,27 +114,38 @@ class AiCompletionService
             ->implode('');
     }
 
-    private function viaDeepSeek(string $systemPrompt, string $userContent, EngineEnum $engine): string
+    private function viaDeepSeek(
+        string $systemPrompt,
+        string $userContent,
+        EngineEnum $engine,
+        ?string $model = null,
+    ): string
     {
         ApiHelper::setDeepseekKey();
 
-        $model = $engine->getDefaultWordModel(null);
+        $model ??= $engine->getDefaultWordModel(null)->value;
         $apiKey = config('deepseek.api_key');
 
+        $payload = [
+            'model'    => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userContent],
+            ],
+            'stream' => false,
+        ];
+        if (request()?->attributes->has('garad_provider_request_max')) {
+            $payload['max_tokens'] = ProviderRequestBudgetService::MAX_OUTPUT_TOKENS;
+        }
+        $payload = app(ProviderRequestBudgetService::class)->preparePayload($payload);
+        app(ProviderRequestBudgetService::class)->recordProviderRequest();
         $response = (new Client)->post('https://api.deepseek.com/chat/completions', [
             'headers' => [
                 'Content-Type'  => 'application/json',
                 'Accept'        => 'application/json',
                 'Authorization' => "Bearer {$apiKey}",
             ],
-            'json' => [
-                'model'    => $model->value,
-                'messages' => [
-                    ['role' => 'system', 'content' => $systemPrompt],
-                    ['role' => 'user', 'content' => $userContent],
-                ],
-                'stream' => false,
-            ],
+            'json' => $payload,
         ]);
 
         $body = json_decode($response->getBody()->getContents(), true);
@@ -123,10 +153,15 @@ class AiCompletionService
         return $body['choices'][0]['message']['content'] ?? '';
     }
 
-    private function viaXAi(string $systemPrompt, string $userContent, EngineEnum $engine): string
+    private function viaXAi(
+        string $systemPrompt,
+        string $userContent,
+        EngineEnum $engine,
+        ?string $model = null,
+    ): string
     {
         $apiKey = ApiHelper::setXAiKey();
-        $model = $engine->getDefaultWordModel(null);
+        $model ??= $engine->getDefaultWordModel(null)->value;
 
         $client = OpenAIMain::factory()
             ->withApiKey($apiKey)
@@ -134,7 +169,7 @@ class AiCompletionService
             ->make();
 
         $result = $client->chat()->create([
-            'model'    => $model->value,
+            'model'    => $model,
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user', 'content' => $userContent],

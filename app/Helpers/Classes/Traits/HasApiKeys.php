@@ -6,6 +6,7 @@ use App\Helpers\Classes\Helper;
 use App\Models\Setting;
 use App\Models\SettingTwo;
 use Illuminate\Support\Arr;
+use RuntimeException;
 
 trait HasApiKeys
 {
@@ -16,7 +17,18 @@ trait HasApiKeys
 
     public static function setGammaApiKey(): string
     {
-        return Arr::random(explode(',', setting('gamma_api_secret', 'empty')));
+        $apiKeys = array_values(array_filter(
+            array_map('trim', explode(',', (string) setting('gamma_api_secret', ''))),
+            static fn (string $apiKey): bool => $apiKey !== ''
+                && strtolower($apiKey) !== 'empty'
+                && $apiKey !== '*********************'
+        ));
+
+        if ($apiKeys === []) {
+            throw new RuntimeException('No valid Gamma API key is configured.');
+        }
+
+        return Arr::random($apiKeys);
     }
 
     public static function setFalAIKey(): string

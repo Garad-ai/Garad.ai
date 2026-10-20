@@ -90,7 +90,7 @@ class ChatbotController extends Controller
 
                 break;
             case EngineEnum::ANTHROPIC->value:
-                $default_model = EntityEnum::fromSlug(setting('anthropic_default_model', EntityEnum::CLAUDE_3_OPUS->value));
+                $default_model = EntityEnum::fromSlug(setting('anthropic_default_model', EntityEnum::CLAUDE_OPUS_4_8->value));
 
                 break;
             case EngineEnum::GEMINI->value:

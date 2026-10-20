@@ -20,8 +20,8 @@ class AIChatProSettingsController extends Controller
         if (Helper::appIsNotDemo()) {
             $request->validate([
                 'ai_chat_display_type'                   => 'required|in:menu,ai_chat,both_fm,frontend',
-                'guest_user_daily_message_limit'         => 'required',
-                'ai_chat_pro.features.image_generation'  => 'nullable|boolean',
+                'guest_user_daily_message_limit'         => 'required|integer|min:0',
+                'ai_chat_pro_image_generation_feature'   => 'nullable|boolean',
                 'guest_user_bottom_text'                 => 'nullable|string|max:255',
                 'ai_chat_pro_default_screen'             => 'required|in:new,last,pinned',
                 'ai_chat_pro_suggestion_style'           => 'required|in:pill,inline',
@@ -34,14 +34,18 @@ class AIChatProSettingsController extends Controller
                 'ai_chat_pro_entity_highlight_max'       => 'nullable|integer|min:1|max:10',
                 'ai_chat_pro_entity_highlight_threshold' => 'nullable|numeric|min:0.5|max:1.0',
                 'ai_chat_pro_typography'                 => 'nullable|json|max:5000',
+                'input_name'                             => 'nullable|array',
+                'input_name.*'                           => 'nullable|string|max:120',
+                'input_prompt'                           => 'nullable|array',
+                'input_prompt.*'                         => 'nullable|string|max:2000',
             ]);
 
             $suggestions = collect($request->input('input_name'))
                 ->zip($request->input('input_prompt'))
                 ->map(function ($pair) {
                     return [
-                        'name'   => trim($pair[0]),
-                        'prompt' => trim($pair[1]),
+                        'name'   => trim((string) ($pair[0] ?? '')),
+                        'prompt' => trim((string) ($pair[1] ?? '')),
                     ];
                 })
                 ->filter(fn ($item) => $item['name'] && $item['prompt']) // Safety net

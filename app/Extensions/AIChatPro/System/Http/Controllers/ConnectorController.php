@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Extensions\AIChatPro\System\Http\Controllers;
 
+use App\Extensions\AIChatPro\System\Connectors\ConnectorDefinition;
 use App\Extensions\AIChatPro\System\Connectors\ConnectorPlanGate;
 use App\Extensions\AIChatPro\System\Connectors\ConnectorRegistry;
 use App\Extensions\AIChatPro\System\Connectors\Models\AIChatProConnector;
@@ -14,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
@@ -135,15 +137,7 @@ class ConnectorController extends Controller
             throw new NotFoundHttpException('Connector definition not found.');
         }
 
-        try {
-            $accessOptions = $definition->accessOptions($connector);
-        } catch (Throwable $exception) {
-            Log::warning('[connectors] accessOptions threw', [
-                'connector_id' => $connector->id,
-                'message'      => $exception->getMessage(),
-            ]);
-            $accessOptions = [];
-        }
+        $accessOptions = $this->accessOptions($definition, $connector);
 
         $payload = [
             'connector_id'   => $connector->id,
@@ -182,14 +176,19 @@ class ConnectorController extends Controller
             throw new NotFoundHttpException('Connector definition not found.');
         }
 
-        try {
-            $accessOptions = $definition->accessOptions($connector);
-        } catch (Throwable) {
-            $accessOptions = [];
-        }
+        $accessOptions = $this->accessOptions($definition, $connector);
 
         $type = (string) ($accessOptions['type'] ?? 'items');
         $selection = array_values(array_filter((array) ($data['selection'] ?? []), fn ($v) => is_string($v) && $v !== ''));
+        $allowedIds = collect($accessOptions['options'] ?? [])
+            ->filter(fn ($option): bool => is_array($option) && isset($option['id']))
+            ->map(fn (array $option): string => (string) $option['id'])
+            ->all();
+        abort_if(
+            array_diff($selection, $allowedIds) !== [],
+            422,
+            'The selection includes resources that are not available to this connection.'
+        );
 
         $connector->selected_access = [
             $type         => $selection,
@@ -223,5 +222,22 @@ class ConnectorController extends Controller
         }
 
         return back()->with(['type' => 'success', 'message' => $message]);
+    }
+
+    private function accessOptions(
+        ConnectorDefinition $definition,
+        AIChatProConnector $connector,
+    ): array {
+        try {
+            return $definition->accessOptions($connector);
+        } catch (Throwable $exception) {
+            Log::warning('[connectors] Provider resource access could not be loaded.', [
+                'connector_id' => $connector->id,
+                'type'         => $connector->type,
+                'message'      => $exception->getMessage(),
+            ]);
+
+            throw new HttpException(502, 'Provider resource access could not be loaded.', $exception);
+        }
     }
 }

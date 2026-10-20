@@ -128,6 +128,7 @@ class SendMessageAction implements AIAgentActionInterface
                 'recipient_id' => ['type' => 'string', 'description' => 'Recipient chat ID (supports {sender_id}).'],
                 'message'      => ['type' => 'string', 'description' => 'Message text (supports context variables).'],
             ],
+            'required' => ['recipient_id', 'message'],
         ];
     }
 

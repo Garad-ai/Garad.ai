@@ -20,9 +20,11 @@ class DrCanvasController extends Controller
             'message_id' => 'required',
         ]);
 
-        try {
-            $message = UserOpenaiChatMessage::find($validated['message_id']);
+        $message = UserOpenaiChatMessage::query()
+            ->where('user_id', auth()->id())
+            ->findOrFail($validated['message_id']);
 
+        try {
             if ($validated['type'] == 'input') {
                 $message->tiptapContent()->updateOrCreate([], [
                     'input'   => $validated['content'],
@@ -51,8 +53,11 @@ class DrCanvasController extends Controller
             'title'      => 'sometimes|nullable|string',
         ]);
 
+        $message = UserOpenaiChatMessage::query()
+            ->where('user_id', auth()->id())
+            ->findOrFail($validated['message_id']);
+
         try {
-            $message = UserOpenaiChatMessage::find($validated['message_id']);
             $message->tiptapContent()->updateOrCreate([], [
                 'title'   => $validated['title'],
                 'user_id' => auth()->id(),

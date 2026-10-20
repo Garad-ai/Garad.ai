@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -80,6 +81,11 @@ class AuthenticatedSessionController extends Controller
                 return response()->json(['errors' => [trans('auth.failed')]], 401);
             }
 
+            $request->session()->put(
+                'garad_auth_redirect',
+                $request->input('redirect'),
+            );
+            $request->session()->put('garad_remember_login', $request->boolean('remember'));
             $otp = random_int(1000, 9999);
             $user->update(['otp' => $otp]); // One DB write instead of save()
 
@@ -99,6 +105,14 @@ class AuthenticatedSessionController extends Controller
             $user = Auth::user();
 
             if (Google2FA::isActivated()) {
+                $request->session()->put(
+                    'garad_auth_redirect',
+                    $this->getRedirectUrl(
+                        $request->get('redirect'),
+                        $request->get('plan'),
+                    ),
+                );
+                $request->session()->put('garad_remember_login', $request->boolean('remember'));
                 session(['user_id' => $user->id]);
                 Auth::logout();
 
@@ -125,9 +139,26 @@ class AuthenticatedSessionController extends Controller
      */
     private function getRedirectUrl(?string $redirect, ?string $plan): string
     {
+        /*
+         * Preserve the LibreChat/OIDC interaction UID across
+         * the real Garad AI login.
+         */
+        if ($redirect && str_starts_with($redirect, 'stagingChat:')) {
+            $uid = trim(substr($redirect, strlen('stagingChat:')));
+
+            if ($uid !== '') {
+                return '/sso/staging-chat?uid=' . rawurlencode($uid);
+            }
+        }
+
+        if (! Auth::user()?->isAdmin()) {
+            return '/chat';
+        }
+
         // Define your redirect mappings
         $redirectMap = [
             'chatPro'      => '/chat',
+            'stagingChat'  => '/sso/staging-chat',
             'chatProImage' => '/ai-chat-image/chat',
             'aiImagePro'   => '/dashboard/user/ai-image-pro',
             // Add more redirects as needed
@@ -143,24 +174,27 @@ class AuthenticatedSessionController extends Controller
             }
         }
 
-        // Default behavior (existing logic)
-        if (setting('hard_redirect_to_user_dashboard', '0') === '0' && Auth::user()?->isAdmin()) {
+        if (Auth::user()?->isAdmin()) {
             return $plan ? '/dashboard/user/payment?plan=' . $plan : '/dashboard/admin';
         }
 
-        return $plan ? '/dashboard/user/payment?plan=' . $plan : '/dashboard/user';
+        return '/chat';
     }
 
     /**
      * Destroy an authenticated session.
      */
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request): Response
     {
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();
 
         $request->session()->regenerateToken();
+
+        if ($request->expectsJson()) {
+            return response()->noContent();
+        }
 
         return redirect('/');
     }
@@ -190,11 +224,15 @@ class AuthenticatedSessionController extends Controller
         $user->otp = null;
         $user->save();
 
-        Auth::login($user);
+        Auth::login($user, $request->session()->pull('garad_remember_login', false));
         $request->session()->regenerate();
+        $redirect = $this->getRedirectUrl(
+            $request->session()->pull('garad_auth_redirect'),
+            null,
+        );
 
         return response()->json([
-            'link' => '/dashboard',
+            'link' => $redirect,
         ]);
     }
 }

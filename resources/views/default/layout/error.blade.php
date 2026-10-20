@@ -1,5 +1,9 @@
 @extends('panel.layout.app', ['disable_tblr' => true])
 
+@php
+    $setting = $setting ?? \App\Models\Setting::getCache();
+@endphp
+
 @section('content')
     <header class="fixed inset-x-0 top-0 flex justify-center border-b bg-background/10 px-4 py-6 backdrop-blur-md">
         <figure>

@@ -116,8 +116,9 @@ PROMPT;
     {
         $data = json_decode($response, true);
 
-        if (! $data || ! isset($data['title'])) {
+        if (! is_array($data) || ! isset($data['title']) || ! is_string($data['title']) || trim($data['title']) === '') {
             return [
+                'unavailable'        => true,
                 'title'              => 'Details unavailable',
                 'subtitle'           => '',
                 'description'        => 'Could not load entity details at this time.',
@@ -135,9 +136,9 @@ PROMPT;
             'description'        => $data['description'] ?? '',
             'image_url'          => null,
             'image_search_query' => $data['image_search_query'] ?? null,
-            'key_facts'          => array_slice($data['key_facts'] ?? [], 0, 6),
-            'sections'           => array_slice($data['sections'] ?? [], 0, 2),
-            'related_entities'   => array_slice($data['related_entities'] ?? [], 0, 3),
+            'key_facts'          => array_slice(array_values((array) ($data['key_facts'] ?? [])), 0, 6),
+            'sections'           => array_slice(array_values((array) ($data['sections'] ?? [])), 0, 2),
+            'related_entities'   => array_slice(array_values((array) ($data['related_entities'] ?? [])), 0, 3),
         ];
     }
 

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Team;
 
+use App\Extensions\Chatbot\System\Models\ChatbotConversation;
 use App\Helpers\Classes\Helper;
+use App\Helpers\Classes\MarketplaceHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Team\TeamInviteRequest;
 use App\Jobs\SendTeamInviteEmail;
@@ -65,11 +67,6 @@ class TeamController extends Controller
                 'message' => trans('This feature is disabled in demo mode.'),
             ]);
         }
-      
-      abort_unless(
-    (int) $team->user_id === (int) $request->user()->id,
-    404
-);
 
         $subscription = getCurrentActiveSubscription();
 
@@ -80,10 +77,7 @@ class TeamController extends Controller
             ]);
         }
 
-        $data = $request->validated();
-$data['team_id'] = $team->id;
-
-TeamMember::query()->create($data);
+        TeamMember::query()->create($request->validated());
 
         dispatch(new SendTeamInviteEmail($request->user(), $request->get('email')));
 
@@ -94,14 +88,11 @@ TeamMember::query()->create($data);
     }
 
     public function teamMember(Team $team, TeamMember $teamMember)
-{
-    abort_unless(
-        (int) $team->user_id === (int) auth()->id()
-        && (int) $teamMember->team_id === (int) $team->id,
-        404
-    );
+    {
+        abort_if(auth()->id() !== $team->user_id, 404);
+        abort_if($teamMember->team_id !== $team->id, 404);
 
-    return view('panel.user.team.edit', [
+        return view('panel.user.team.edit', [
             'filter'           => 'all',
             'team'             => $team,
             'member'           => $teamMember,
@@ -112,21 +103,19 @@ TeamMember::query()->create($data);
     }
 
     public function teamMemberUpdate(Request $request, Team $team, TeamMember $teamMember): RedirectResponse
-{
-    abort_unless(
-        (int) $team->user_id === (int) auth()->id()
-        && (int) $teamMember->team_id === (int) $team->id,
-        404
-    );
-
-    if (Helper::appIsDemo()) {
+    {
+        if (Helper::appIsDemo()) {
             return back()->with([
                 'type'    => 'error',
                 'message' => trans('This feature is disabled in demo mode.'),
             ]);
         }
 
+        abort_if(auth()->id() !== $team->user_id, 404);
+        abort_if($teamMember->team_id !== $team->id, 404);
+
         $request['allow_unlimited_credits'] = (bool) $request->get('allow_unlimited_credits', false);
+        $request['is_human_agent'] = (bool) $request->get('is_human_agent', false);
 
         // $user = $team->user;
         // $manager_remaining_images = $user->remaining_images;
@@ -135,6 +124,7 @@ TeamMember::query()->create($data);
         $data = $request->validate([
             'role'                      => 'required',
             'status'                    => 'required',
+            'is_human_agent'            => 'sometimes|boolean',
             'daily_shared_credit_limit' => 'sometimes|nullable|numeric|min:0',
             // 'remaining_images' => $request['allow_unlimited_credits']
             //     ? 'sometimes|nullable|numeric'
@@ -162,14 +152,24 @@ TeamMember::query()->create($data);
             ]);
         }
 
-        abort_unless(
-    (int) $team->user_id === (int) auth()->id()
-    && (int) $teamMember->team_id === (int) $team->id,
-    404
-);
+        abort_if(auth()->id() !== $team->user_id, 404);
 
         if ($teamMember->user) {
             $teamMember->user->update(['team_id' => null, 'team_member_id' => null]);
+        }
+
+        $conversationClass = ChatbotConversation::class;
+
+        if ($teamMember->user_id
+            && MarketplaceHelper::isRegistered('chatbot')
+            && class_exists($conversationClass)
+        ) {
+            $conversationClass::query()
+                ->where('assigned_agent_id', $teamMember->user_id)
+                ->whereHas('chatbot', function ($query) use ($team) {
+                    $query->where('user_id', $team->user_id);
+                })
+                ->update(['assigned_agent_id' => null]);
         }
 
         $teamMember->delete();

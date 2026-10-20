@@ -57,7 +57,7 @@
                             name="stable_diffusion_api_key"
                             multiple
                         >
-                            @foreach (explode(',', $settings_two->stable_diffusion_api_key) ?? [] as $secret)
+                            @foreach (explode(',', (string) $settings_two->stable_diffusion_api_key) as $secret)
                                 {{-- if null then pass --}}
                                 @if ($secret == null)
                                     @continue

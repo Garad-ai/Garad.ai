@@ -1,0 +1,194 @@
+.plans-page { position: fixed; inset: 0; z-index: 50; overflow-y: auto; color: var(--text); background: radial-gradient(900px 420px at 50% -120px, var(--brand-soft), transparent 70%), var(--bg, var(--surface)); }
+.plans-topbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; padding: 14px 24px; backdrop-filter: blur(10px); background: color-mix(in srgb, var(--surface) 80%, transparent); }
+.plans-back { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 12px; font-weight: 600; }
+.plans-back:hover { background: var(--surface-2); }
+.plans-main { width: min(1180px, 100%); margin: 0 auto; padding: 18px 24px 64px; }
+.plans-hero { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 30px; text-align: center; }
+.plans-hero > span { color: var(--brand); font-size: 11px; font-weight: 700; letter-spacing: 1.2px; }
+.plans-hero h1 { margin: 0; font: 700 clamp(26px, 4vw, 40px) "Manrope", sans-serif; letter-spacing: -1px; }
+.plans-hero p { max-width: 520px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.plans-toggle { display: flex; margin-top: 10px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.plans-toggle button { min-width: 112px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; }
+.plans-toggle button.active { color: var(--text); background: var(--surface); box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+
+.plans-grid { display: grid; gap: 16px; align-items: stretch; }
+.plans-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.plans-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 860px; margin: 0 auto; }
+.plans-card { display: flex; flex-direction: column; min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); transition: transform .18s, border-color .18s, box-shadow .18s; }
+.plans-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 40%, var(--line)); }
+.plans-card.popular { border-color: color-mix(in srgb, var(--brand) 55%, var(--line)); background: linear-gradient(180deg, var(--brand-soft), var(--surface) 38%); box-shadow: 0 12px 40px color-mix(in srgb, var(--brand) 14%, transparent); }
+.plans-card.current { box-shadow: inset 0 0 0 1.5px var(--brand); }
+.plans-card > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 26px; }
+.plans-card h3 { margin: 0; font: 700 18px "Manrope", sans-serif; }
+.plans-badge { padding: 4px 9px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.plans-desc { min-height: 40px; margin: 8px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.plans-price { display: flex; align-items: baseline; gap: 6px; margin-bottom: 18px; }
+.plans-price strong { font: 700 40px "Manrope", sans-serif; letter-spacing: -1.5px; }
+.plans-price span { color: var(--faint); font-size: 13px; }
+
+.plans-cta { width: 100%; height: 44px; border: 0; border-radius: 12px; background: var(--brand); color: #fff; cursor: pointer; font-size: 14px; font-weight: 700; transition: filter .15s, transform .1s; }
+.plans-cta:hover:not(:disabled) { filter: brightness(1.1); }
+.plans-cta:active:not(:disabled) { transform: scale(.985); }
+.plans-cta:disabled { cursor: default; opacity: .65; }
+.plans-cta.is-current { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); opacity: 1; }
+.plans-card section { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line-soft, var(--line)); }
+.plans-card h4 { margin: 0 0 11px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.plans-card ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.plans-card li { display: flex; align-items: center; gap: 9px; color: var(--text); font-size: 13px; }
+.plans-card li svg { flex: 0 0 auto; color: var(--brand); }
+.plans-card li.off { color: var(--faint); }
+.plans-card li.off svg { color: var(--faint); }
+.plans-models { display: flex; flex-wrap: wrap; gap: 6px; }
+.plans-models em { padding: 5px 10px; border-radius: 8px; background: var(--brand-soft); color: var(--brand); font-size: 12px; font-style: normal; font-weight: 600; }
+
+.plans-seats { margin-bottom: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.plans-seats-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; font-weight: 600; }
+.plans-stepper { display: flex; align-items: center; gap: 4px; }
+.plans-stepper button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 16px; }
+.plans-stepper input { width: 52px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 700; text-align: center; appearance: textfield; -moz-appearance: textfield; }
+.plans-stepper input::-webkit-outer-spin-button, .plans-stepper input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.plans-range { width: 100%; accent-color: var(--brand); }
+.plans-seats-total { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.plans-seats-total strong { color: var(--text); font-size: 14px; }
+
+.plans-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
+.plans-checkout { width: min(440px, 100%); max-height: 94vh; overflow-y: auto; padding: 22px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: 0 30px 80px rgba(0,0,0,.4); }
+.plans-checkout > header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+.plans-checkout > header span { color: var(--brand); font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+.plans-checkout h2 { margin: 4px 0 0; font: 700 20px "Manrope", sans-serif; }
+.plans-checkout > header button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: var(--surface-2); color: var(--muted); cursor: pointer; }
+.plans-checkout h4 { margin: 18px 0 9px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.plans-summary { padding: 14px; border-radius: 14px; background: var(--surface-2); }
+.plans-summary > div { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.plans-summary strong { font: 700 22px "Manrope", sans-serif; }
+.plans-summary small { color: var(--faint); font-size: 11px; }
+.plans-methods { display: grid; gap: 8px; }
+.plans-methods label { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.plans-methods label.selected { border-color: var(--brand); background: var(--brand-soft); }
+.plans-methods input { accent-color: var(--brand); }
+.plans-method-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: #e8402a; color: #fff; font-size: 11px; font-weight: 800; }
+.plans-method-mark.logo { background: #fff; border: 1px solid var(--line); padding: 3px; }
+.plans-method-mark.logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.plans-methods strong { display: block; font-size: 14px; }
+.plans-methods small { color: var(--muted); font-size: 11.5px; }
+.plans-field { display: grid; gap: 6px; margin: 14px 0 4px; }
+.plans-field span { color: var(--muted); font-size: 12px; font-weight: 600; }
+.plans-field input { height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--text); font-size: 14px; }
+.plans-field input:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+.plans-error { margin: 12px 0 0; color: #ef5b5b; font-size: 12.5px; }
+.plans-checkout .plans-cta { margin-top: 16px; }
+.plans-note { margin: 10px 0 0; color: var(--faint); font-size: 11.5px; text-align: center; }
+
+@media (max-width: 960px) {
+  .plans-grid.cols-3, .plans-grid.cols-2 { grid-template-columns: 1fr; max-width: 520px; margin-inline: auto; }
+  .plans-main { padding-inline: 14px; }
+  .plans-desc { min-height: 0; }
+}
+
+.plans-explorer { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.plans-explorer-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; background: transparent; color: var(--text); cursor: pointer; font-size: 13px; font-weight: 700; padding: 4px 0; }
+.plans-explorer-toggle .chev { transition: transform .15s; color: var(--muted); }
+.plans-explorer-toggle .chev.open { transform: rotate(180deg); }
+.plans-explorer-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0; }
+.plans-explorer-tabs button { height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600; }
+.plans-explorer-tabs button.active { background: var(--brand-soft); color: var(--brand); border-color: transparent; }
+.plans-provider { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--surface-2); }
+.plans-provider summary { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; cursor: pointer; font-size: 13px; list-style: none; }
+.plans-provider summary::-webkit-details-marker { display: none; }
+.plans-provider summary small { color: var(--muted); font-size: 11px; }
+.plans-provider ul { margin: 0; padding: 0 10px 8px; list-style: none; display: grid; gap: 4px; }
+.plans-provider li { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text); }
+.plans-provider li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plans-provider li em { flex: none; color: var(--muted); font-style: normal; }
+.plans-secure { max-width: 1040px; margin: 36px auto 24px; padding: 0; text-align: center; }
+.plans-secure-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 14px 18px; margin-bottom: 12px; }
+.plans-secure-sep { align-self: flex-end; width: 1px; height: 28px; margin-bottom: 4px; background: var(--line, rgba(128,128,128,.35)); }
+@media (max-width: 760px) { .plans-secure-sep { display: none; } }
+.plans-secure h3 { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 13px; }
+.plans-secure-group { display: grid; gap: 6px; margin-bottom: 0; }
+.plans-secure-group > span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.plans-secure-group > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.plans-logo { display: inline-flex; align-items: center; justify-content: center; height: 26px; overflow: hidden; border-radius: 6px; }
+.plans-logo img { display: block; height: 26px; width: auto; }
+.plans-logo img.dark { display: none; }
+:root[data-theme="dark"] .plans-logo img.light { display: none; }
+:root[data-theme="dark"] .plans-logo img.dark { display: block; }
+.plans-logo.plain { padding: 0 10px; background: #fff; border: 1px solid #e5e7eb; }
+.plans-logo.plain img { height: 28px; }
+:root[data-theme="dark"] .plans-logo.plain img.light { display: block; }
+.plans-credits { margin: -6px 0 16px; color: var(--muted); font-size: 13px; }
+.plans-credits strong { color: var(--text); }
+.plans-top-group { display: grid; gap: 6px; margin-bottom: 10px; }
+.plans-top-group small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.plans-top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); font-size: 13px; font-weight: 600; }
+.plans-top-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plans-cost { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-style: normal; font-weight: 800; }
+.plans-cost.low { background: rgba(34,197,94,.16); color: #16a34a; }
+.plans-cost.mid { background: rgba(245,158,11,.18); color: #d97706; }
+.plans-cost.high { background: rgba(239,68,68,.16); color: #dc2626; }
+.plans-cost-hint { margin: 4px 0 0; color: var(--faint); font-size: 11px; line-height: 1.4; }
+.plans-secure p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.plans-compare { margin: 56px 0 0; }
+.plans-compare h2 { margin: 0 0 16px; font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+.plans-compare-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.plans-compare-table { min-width: 560px; }
+.plans-compare-row { display: grid; align-items: center; gap: 8px; padding: 7px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.plans-compare-row.head { position: sticky; top: 0; z-index: 1; background: var(--surface); padding-top: 14px; padding-bottom: 14px; }
+.plans-compare-row.head strong { display: flex; flex-direction: column; align-items: center; font-size: 14px; }
+.plans-compare-row.head small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.plans-compare-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plans-compare-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--brand); }
+.plans-compare-cell small { color: var(--muted); font-size: 11px; }
+.plans-compare-dash { color: var(--faint); }
+.plans-compare-cat { padding: 12px 16px 8px; background: var(--surface-2); border-bottom: 1px solid var(--line); color: var(--text); font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+.plans-compare-provider { padding: 10px 16px 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.plans-compare .plans-cost-hint { margin-top: 10px; }
+.plans-compare h2 { font-size: 18px; }
+.plans-compare-scroll { box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04); }
+.plans-compare-row:hover { background: color-mix(in srgb, var(--brand) 4%, transparent); }
+.plans-compare-row.head strong { color: var(--text); }
+.plans-compare-cat { font-size: 11px; color: var(--brand); }
+.plans-compare-provider { padding: 12px 16px 4px; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; }
+.plans-compare-row > span:first-child { padding-left: 10px; font-weight: 500; }
+.plans-compare-cell .plans-cost { transform: scale(.92); }
+.plans-compare-row.head, .plans-compare-cat { }
+
+.plans-logo.plain img { height: 22px; }
+
+.plans-compare-cell { flex-direction: row; justify-content: center; gap: 5px; white-space: nowrap; }
+
+.cs-main { width: min(1120px, 100%); margin: 0 auto; padding: 36px 24px 72px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 56px; align-items: start; }
+.cs-intro h1 { margin: 0 0 14px; font: 700 clamp(30px, 4.4vw, 48px)/1.08 "Manrope", sans-serif; letter-spacing: -1.4px; }
+.cs-intro > p { margin: 0 0 30px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.cs-intro h4 { margin: 0 0 12px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.cs-intro ul { display: grid; gap: 12px; margin: 0 0 30px; padding: 0; list-style: none; }
+.cs-intro li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.cs-intro li svg { flex: none; color: var(--brand); }
+.cs-intro .cs-note { margin: 0; font-size: 13px; }
+.cs-intro .cs-note a { color: var(--brand); font-weight: 600; }
+.cs-card { padding: 26px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, .08); }
+.cs-card form { display: grid; gap: 16px; }
+.cs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.cs-card label { display: grid; gap: 7px; font-size: 12.5px; font-weight: 600; }
+.cs-card input, .cs-card select, .cs-card textarea { width: 100%; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--text); font-size: 13.5px; font-family: inherit; outline: none; }
+.cs-card input, .cs-card select { height: 42px; }
+.cs-card textarea { min-height: 130px; padding: 12px 14px; resize: vertical; font-family: inherit; }
+.cs-card input:focus, .cs-card select:focus, .cs-card textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.cs-card .plans-cta { height: 46px; border-radius: 999px; }
+.cs-error { margin: 0; color: #e5484d; font-size: 12.5px; }
+.cs-done { display: grid; justify-items: center; gap: 10px; padding: 40px 10px; text-align: center; }
+.cs-done > span { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); }
+.cs-done h2 { margin: 6px 0 0; font: 700 24px "Manrope", sans-serif; }
+.cs-done p { max-width: 360px; margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+@media (max-width: 860px) { .cs-main { grid-template-columns: 1fr; gap: 28px; padding-top: 18px; } .cs-grid { grid-template-columns: 1fr; } }
+
+.cs-intro li svg { width: 18px; height: 18px; }
+.cs-intro h4 + .cs-logos { margin-top: 0; }
+.cs-logos { overflow: hidden; margin: 0 0 30px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.cs-logos-track { display: flex; gap: 34px; width: max-content; animation: cs-scroll 28s linear infinite; }
+.cs-logos:hover .cs-logos-track { animation-play-state: paused; }
+.cs-logos-track span { flex: none; color: var(--muted); font: 800 17px "Manrope", sans-serif; letter-spacing: -.3px; white-space: nowrap; opacity: .85; }
+@keyframes cs-scroll { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .cs-logos-track { animation: none; } }
+.cs-help { margin: 18px 0 0; color: var(--muted); font-size: 12.5px; }
+.cs-help a { color: var(--text); text-decoration: underline; }

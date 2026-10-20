@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Laravel\Cashier\Billable;
 use Laravel\Cashier\Subscription as Subscriptions;
@@ -43,6 +44,12 @@ class User extends Authenticatable
         'name',
         'surname',
         'email',
+        'public_username',
+        'profile_visibility',
+        'bio',
+        'website',
+        'allow_mentions',
+        'allow_collaboration_requests',
         'country',
         'otp',
         'type',
@@ -173,6 +180,104 @@ class User extends Authenticatable
         return $this->hasMany(Activity::class);
     }
 
+    public function follows(): HasMany
+    {
+        return $this->hasMany(UserFollow::class, 'follower_id');
+    }
+
+    public function followers(): HasMany
+    {
+        return $this->hasMany(UserFollow::class, 'followed_user_id');
+    }
+
+    public function workspaceMemberships(): HasMany
+    {
+        return $this->hasMany(WorkspaceMembership::class);
+    }
+
+    public function isFollowing(User $otherUser): bool
+    {
+        return UserFollow::query()
+            ->where('follower_id', $this->id)
+            ->where('followed_user_id', $otherUser->id)
+            ->exists();
+    }
+
+    public function isFollowerOf(User $otherUser): bool
+    {
+        return UserFollow::query()
+            ->where('follower_id', $otherUser->id)
+            ->where('followed_user_id', $this->id)
+            ->exists();
+    }
+
+    public function canViewProfile(?User $viewer): bool
+    {
+        if ($this->id === $viewer?->id) {
+            return true;
+        }
+
+        $visibility = $this->profile_visibility ?? 'private';
+
+        if ($visibility === 'public') {
+            return true;
+        }
+
+        if ($visibility === 'connections') {
+            if (! $viewer) {
+                return false;
+            }
+
+            return $this->isFollowerOf($viewer) && $this->isFollowing($viewer);
+        }
+
+        return false;
+    }
+
+    public function hasWorkspaceRole(string $workspaceType, int $workspaceId, array $roles = []): bool
+    {
+        if ($workspaceType === 'team' && Schema::hasTable('teams') && Schema::hasTable('team_members')) {
+            $team = Team::query()->find($workspaceId);
+            if ($team && (int) $team->user_id === (int) $this->id) {
+                if ($roles === [] || in_array('owner', $roles, true)) {
+                    return true;
+                }
+            }
+
+            $teamMember = TeamMember::query()
+                ->where('team_id', $workspaceId)
+                ->where('user_id', $this->id)
+                ->where('status', 'active');
+
+            if ($roles !== []) {
+                $teamMember->whereIn('role', $roles);
+            }
+
+            if ($teamMember->exists()) {
+                return true;
+            }
+
+            return false;
+        }
+
+        $query = $this->workspaceMemberships()
+            ->where('workspace_type', $workspaceType)
+            ->where('workspace_id', $workspaceId);
+
+        if ($roles !== []) {
+            $query->whereIn('role', $roles);
+        }
+
+        return $query->exists();
+    }
+
+    public function profileUrl(): string
+    {
+        return $this->public_username
+            ? '/@' . $this->public_username
+            : '/profile/' . $this->id;
+    }
+
     public function relationPlan()
     {
         return $this->hasOneThrough(
@@ -193,7 +298,6 @@ class User extends Authenticatable
             'paypal_approved',
             'iyzico_approved',
             'paystack_approved',
-          'evcplus_approved',
         ]);
     }
 
@@ -385,6 +489,40 @@ class User extends Authenticatable
     public function externalChatbots(): HasMany
     {
         return $this->hasMany(\App\Extensions\Chatbot\System\Models\Chatbot::class, 'user_id');
+    }
+
+    public function isActiveHumanAgent(): bool
+    {
+        if (! $this->team_manager_id) {
+            return false;
+        }
+
+        $member = $this->teamMember;
+
+        return (bool) ($member && $member->status === 'active' && $member->is_human_agent);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function accessibleChatbotIds(): array
+    {
+        $ids = $this->externalChatbots()->pluck('id');
+
+        if ($this->isActiveHumanAgent()) {
+            $ids = $ids->merge(
+                \App\Extensions\Chatbot\System\Models\Chatbot::query()
+                    ->where('user_id', $this->team_manager_id)
+                    ->pluck('id')
+            );
+        }
+
+        return $ids->unique()->values()->all();
+    }
+
+    public function resolveHumanAgentOwnerId(): int
+    {
+        return $this->isActiveHumanAgent() ? (int) $this->team_manager_id : (int) $this->getKey();
     }
 
     public function myTeam()

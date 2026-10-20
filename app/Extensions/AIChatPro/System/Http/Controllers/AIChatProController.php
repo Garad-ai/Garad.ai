@@ -216,8 +216,11 @@ class AIChatProController extends Controller
             if ($message->user_id !== Auth::id()) {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
-        } elseif ($message->user_id !== null) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        } else {
+            $guestChatIds = array_map('intval', (array) session('ai_chat_pro_guest_chat_ids', []));
+            if ($message->user_id !== null || ! in_array((int) $message->user_openai_chat_id, $guestChatIds, true)) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
         }
 
         // Return cached suggestions if already generated
@@ -328,6 +331,11 @@ class AIChatProController extends Controller
         $chat->is_guest = true;
         $chat->save();
 
+        $guestChatIds = array_map('intval', (array) session('ai_chat_pro_guest_chat_ids', []));
+        $guestChatIds[] = (int) $chat->id;
+        $guestChatIds = array_values(array_unique(array_slice($guestChatIds, -10)));
+        session()->put('ai_chat_pro_guest_chat_ids', $guestChatIds);
+
         return $chat;
     }
 
@@ -361,4 +369,30 @@ class AIChatProController extends Controller
 
         return $chat;
     }
+
+    // GARAD_V63_STATUS_METHODS_START
+    public function garadVideoStatus(int $videoId): JsonResponse
+    {
+        try {
+            $message = app(\App\Extensions\AIChatPro\System\Services\GaradVideoToolServiceV5::class)
+                ->status(['video_id' => $videoId]);
+
+            return response()->json(['ok' => true, 'message' => $message]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function garadPresentationStatus(string $generationId): JsonResponse
+    {
+        try {
+            $message = app(\App\Extensions\AIChatPro\System\Services\GaradPresentationToolServiceV5::class)
+                ->status(['generation_id' => $generationId]);
+
+            return response()->json(['ok' => true, 'message' => $message]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+    // GARAD_V63_STATUS_METHODS_END
 }

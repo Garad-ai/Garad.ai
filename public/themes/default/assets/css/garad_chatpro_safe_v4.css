@@ -1,0 +1,146 @@
+/* Garad Chat Pro Safe v4 — additive UI only; native features remain intact. */
+.garad-chatpro-safe-v4 {
+    --garad-v4-border: color-mix(in srgb, currentColor 10%, transparent);
+    --garad-v4-soft: color-mix(in srgb, currentColor 4.5%, transparent);
+    --garad-v4-soft-hover: color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.garad-chatpro-safe-v4 #chat_form {
+    max-width: 900px !important;
+}
+
+.garad-chatpro-safe-v4 #chat_form .lqd-chat-form-inputs-container {
+    position: relative !important;
+    border: 1px solid color-mix(in srgb, currentColor 8%, transparent) !important;
+    border-radius: 28px !important;
+    background: hsl(var(--background)) !important;
+    box-shadow: 0 10px 38px rgba(15, 23, 42, .065) !important;
+    overflow: visible;
+}
+
+.garad-chatpro-safe-v4 #chat_form .lqd-chat-form-inputs-container:focus-within {
+    border-color: color-mix(in srgb, hsl(var(--primary)) 42%, transparent) !important;
+    box-shadow: 0 12px 42px rgba(15, 23, 42, .08), 0 0 0 3px color-mix(in srgb, hsl(var(--primary)) 8%, transparent) !important;
+}
+
+.garad-chatpro-safe-v4 #chat_form #prompt {
+    line-height: 1.55 !important;
+}
+
+/* Hide visual leftovers from earlier experimental patches. Native controls are untouched. */
+.garad-chatpro-safe-v4 #chat_form .garad-capability-strip,
+.garad-chatpro-safe-v4 #chat_form .garad-chat-capabilities,
+.garad-chatpro-safe-v4 #chat_form .garad-quick-tools,
+.garad-chatpro-safe-v4 #chat_form .garad-safe-create-tool-picker,
+.garad-chatpro-safe-v4 #chat_form .garad-u-plus,
+.garad-chatpro-safe-v4 #chat_form .garad-u-menu,
+.garad-chatpro-safe-v4 #chat_form .garad-u-chip {
+    display: none !important;
+}
+
+.garad-safe-create-wrap {
+    margin: 3px 0 10px;
+}
+
+.garad-safe-create-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 2px 7px;
+    color: color-mix(in srgb, currentColor 50%, transparent);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.garad-safe-create-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.garad-safe-create-tool {
+    display: flex !important;
+    min-width: 0;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 8px 9px !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    color: inherit !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    text-align: left;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+}
+
+.garad-safe-create-tool:hover,
+.garad-safe-create-tool.is-active {
+    border-color: color-mix(in srgb, currentColor 7%, transparent) !important;
+    background: var(--garad-v4-soft-hover) !important;
+}
+
+.garad-safe-create-tool:active { transform: scale(.985); }
+
+.garad-safe-create-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    place-items: center;
+    border-radius: 8px;
+    background: var(--garad-v4-soft);
+    color: hsl(var(--primary));
+    font-size: 14px;
+}
+
+.garad-safe-create-tool span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.garad-safe-tool-chip {
+    position: absolute;
+    z-index: 3;
+    bottom: 66px;
+    left: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: calc(100% - 36px);
+    padding: 6px 8px 6px 9px;
+    border: 1px solid color-mix(in srgb, hsl(var(--primary)) 18%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, hsl(var(--primary)) 6%, hsl(var(--background)));
+    color: hsl(var(--heading-foreground));
+    font-size: 10.5px;
+    font-weight: 600;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, .05);
+}
+
+.garad-safe-tool-chip[hidden] { display: none !important; }
+.garad-safe-tool-chip-dot { width: 7px; height: 7px; border-radius: 999px; background: hsl(var(--primary)); }
+.garad-safe-tool-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.garad-safe-tool-chip button { display:grid; width:19px; height:19px; place-items:center; padding:0; border:0; border-radius:999px; background:transparent; color:inherit; font-size:16px; line-height:1; opacity:.5; }
+.garad-safe-tool-chip button:hover { background: var(--garad-v4-soft-hover); opacity:1; }
+
+/* The native + dropdown contains upload, web, research, connectors, canvas, prompts,
+   skills and brand voice. Make it feel like one coherent tool menu rather than a list. */
+.garad-chatpro-safe-v4 #chat_form [data-dropdown] .garad-safe-create-wrap,
+.garad-chatpro-safe-v4 #chat_form .lqd-dropdown-dropdown .garad-safe-create-wrap {
+    min-width: 260px;
+}
+
+@media (max-width: 767px) {
+    .garad-chatpro-safe-v4 #chat_form .lqd-chat-form-inputs-container { border-radius: 24px !important; }
+    .garad-safe-create-grid { grid-template-columns: 1fr 1fr; }
+    .garad-safe-tool-chip { bottom: 58px; left: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .garad-safe-create-tool { transition: none !important; }
+}

@@ -53,6 +53,17 @@ class RealtimeVoiceChatController extends Controller
      */
     public function session(): JsonResponse
     {
+        if (! Helper::appIsDemo()) {
+            $balance = $this->checkBalance();
+            $balanceData = $balance->getData(true);
+
+            if (($balanceData['status'] ?? null) !== 'success') {
+                return response()->json([
+                    'error' => $balanceData['message'] ?? __('Voice credits are unavailable.'),
+                ], 402);
+            }
+        }
+
         if (Helper::appIsDemo()) {
             $rateLimiter = new RateLimiter(self::DEMO_RATE_LIMIT_KEY, self::DEMO_MAX_ATTEMPTS);
 

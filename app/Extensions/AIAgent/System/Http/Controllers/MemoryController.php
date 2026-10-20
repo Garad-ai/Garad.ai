@@ -13,6 +13,7 @@ use App\Extensions\AIAgent\System\Services\AIAgentPlanService;
 use App\Helpers\Classes\Helper;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
@@ -23,12 +24,25 @@ class MemoryController extends Controller
         private readonly AIAgentPlanService $planService,
     ) {}
 
-    public function index(): View
+    public function index(Request $request): View|JsonResponse
     {
         $items = AIAgentMemory::query()
             ->where('user_id', Auth::id())
             ->latest()
-            ->paginate(20);
+            ->paginate(min(100, max(1, $request->integer('per_page', 20))));
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'data' => $items->items(),
+                'meta' => [
+                    'current_page' => $items->currentPage(),
+                    'last_page' => $items->lastPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                ],
+            ]);
+        }
 
         return view('ai-agent::memory.index', [
             'title'       => __('User Memory'),

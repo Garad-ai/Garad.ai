@@ -650,6 +650,14 @@ function openaiSettingsSave() {
 		formData.append('enabled_gpt_image_2', $("#enabled_gpt_image_2").is(":checked") ? 1 : 0);
 	}
 
+	if ($('#enabled_gpt_image_2_5_sunburst')) {
+		formData.append('enabled_gpt_image_2_5_sunburst', $("#enabled_gpt_image_2_5_sunburst").is(":checked") ? 1 : 0);
+	}
+
+	if ($('#enabled_gpt_image_2_5_flare')) {
+		formData.append('enabled_gpt_image_2_5_flare', $("#enabled_gpt_image_2_5_flare").is(":checked") ? 1 : 0);
+	}
+
     $.ajax({
         type: "post",
         url: "/dashboard/admin/settings/openai-save",
@@ -683,7 +691,10 @@ function anthropicSettingsSave() {
     formData.append('anthropic_api_secret', $("#anthropic_api_secret").val());
     formData.append('anthropic_default_model', $("#anthropic_default_model").val());
     formData.append('anthropic_bedrock_model', $("#anthropic_bedrock_model").val());
-    formData.append('anthropic_max_input_length', $("#anthropic_max_input_length").val());
+    var maxInputLength = $("#anthropic_max_input_length").val();
+    if (maxInputLength !== undefined && maxInputLength !== null && maxInputLength !== "") {
+        formData.append('anthropic_max_input_length', maxInputLength);
+    }
     formData.append('anthropic_max_output_length', $("#anthropic_max_output_length").val());
 
     $.ajax({
@@ -694,14 +705,18 @@ function anthropicSettingsSave() {
         processData: false,
         success: function (data) {
             toastr.success(magicai_localize?.settings_saved ||'Settings saved succesfully')
-            document.getElementById("settings_button").disabled = false;
-            document.getElementById("settings_button").innerHTML = "Save";
         },
         error: function (data) {
-            var err = data.responseJSON.errors;
-            $.each(err, function (index, value) {
-                toastr.error(value);
-            });
+            var errors = data.responseJSON?.errors;
+            if (errors) {
+                $.each(errors, function (index, value) {
+                    toastr.error(value);
+                });
+            } else {
+                toastr.error(data.responseJSON?.message || "Unable to save Anthropic settings. Please try again.");
+            }
+        },
+        complete: function () {
             document.getElementById("settings_button").disabled = false;
             document.getElementById("settings_button").innerHTML = "Save";
         }

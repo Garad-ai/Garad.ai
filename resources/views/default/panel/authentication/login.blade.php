@@ -159,6 +159,7 @@
                     id="remember"
                     name="remember"
                     type="checkbox"
+                    :checked="old('remember', true)"
                     label="{{ __('Remember me') }}"
                 />
             </div>

@@ -1,0 +1,10 @@
+{
+  "description": "A unified AI assistant enabling users to seamlessly create, analyze, research, and generate diverse content within a single interactive chat.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

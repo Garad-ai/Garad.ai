@@ -23,7 +23,10 @@ class Linkedin
             'app_secret' => setting('LINKEDIN_APP_SECRET'),
         ]);
 
-        $this->config['redirect_uri'] = url($this->config['redirect_uri']);
+        $redirectUri = (string) ($this->config['redirect_uri'] ?? '/social-media/oauth/callback/linkedin');
+        $this->config['redirect_uri'] = preg_match('/^https?:\/\//i', $redirectUri)
+            ? $redirectUri
+            : url($redirectUri);
 
     }
 
@@ -52,17 +55,21 @@ class Linkedin
         return $this;
     }
 
-    public static function authRedirect(array $scopes = []): RedirectResponse
+    public static function authRedirect(array $scopes = [], ?string $state = null): RedirectResponse
     {
         $linkedin = new static;
-        $linkedin->config['scopes'] = $scopes ?? config('platform.linkedin.scopes', []);
+        $scopeList = collect($scopes)
+            ->flatMap(fn ($scope) => preg_split('/\s+/', trim((string) $scope)) ?: [])
+            ->filter()
+            ->unique()
+            ->values();
 
         $apiUrl = $linkedin->apiUrl('oauth/v2/authorization', [
             'response_type' => 'code',
             'client_id'     => $linkedin->config['app_id'],
             'redirect_uri'  => $linkedin->config['redirect_uri'],
-            // 'state' => '',
-            'scope' => collect($linkedin->config['scopes'])->join(' '),
+            'state'         => $state,
+            'scope'         => $scopeList->join(' '),
         ], true);
 
         return redirect($apiUrl);
@@ -70,15 +77,15 @@ class Linkedin
 
     public function getAccessToken(string $code): Response
     {
-        $apiUrl = $this->apiUrl('oauth/v2/accessToken', [
+        $apiUrl = $this->apiUrl('oauth/v2/accessToken', [], true);
+
+        return Http::asForm()->post($apiUrl, [
             'code'          => $code,
             'grant_type'    => 'authorization_code',
             'client_id'     => $this->config['app_id'],
             'client_secret' => $this->config['app_secret'],
             'redirect_uri'  => $this->config['redirect_uri'],
-        ], true);
-
-        return Http::post($apiUrl);
+        ]);
     }
 
     public function refreshAccessToken($refreshToken = null): Response
@@ -100,10 +107,25 @@ class Linkedin
         return Http::withToken($this->accessToken)->get($apiUrl);
     }
 
+    public function getManagedOrganizations(): Response
+    {
+        return $this->apiClient()->get($this->apiUrl('rest/organizationAcls', [
+            'q'     => 'roleAssignee',
+            'state' => 'APPROVED',
+            'count' => 100,
+            'start' => 0,
+        ]));
+    }
+
+    public function getOrganization(string $organizationId): Response
+    {
+        return $this->apiClient()->get($this->apiUrl("rest/organizations/{$organizationId}"));
+    }
+
     public function publishText(string $userId, string $text): Response
     {
         $post = [
-            'author'       => "urn:li:person:{$userId}",
+            'author'       => $this->authorUrn($userId),
             'commentary'   => $text,
             'visibility'   => config('platform.linkedin.options.visibility', 'PUBLIC'),
             'distribution' => [
@@ -127,7 +149,7 @@ class Linkedin
                 ->post($this->apiUrl('rest/images', [
                     'action' => 'initializeUpload',
                 ]), [
-                    'initializeUploadRequest' => ['owner' => "urn:li:person:{$userId}"],
+                    'initializeUploadRequest' => ['owner' => $this->authorUrn($userId)],
                 ])
                 ->json('value');
 
@@ -159,7 +181,7 @@ class Linkedin
         ];
 
         $post = [
-            'author'       => "urn:li:person:{$userId}",
+            'author'       => $this->authorUrn($userId),
             'commentary'   => $text,
             'visibility'   => config('platform.linkedin.options.visibility', 'PUBLIC'),
             'distribution' => [
@@ -195,13 +217,15 @@ class Linkedin
         $mediaFileSize = Storage::size($videoPath);
         $mediaName = basename($videoPath);
 
+        $authorUrn = $this->authorUrn($userId);
+
         $mediaContainerData = [
             'mediaLibraryMetadata' => [
-                'owner'     => "urn:li:person:{$userId}",
+                'owner'     => $authorUrn,
                 'assetName' => $mediaName,
             ],
             'initializeUploadRequest' => [
-                'owner'           => "urn:li:person:{$userId}",
+                'owner'           => $authorUrn,
                 'fileSizeBytes'   => $mediaFileSize,
                 'uploadCaptions'  => false,
                 'uploadThumbnail' => false,
@@ -288,7 +312,7 @@ class Linkedin
 
         // Create the post.
         $post = [
-            'author'       => "urn:li:person:{$userId}",
+            'author'       => $authorUrn,
             'commentary'   => $text,
             'visibility'   => config('platform.linkedin.options.visibility', 'PUBLIC'),
             'distribution' => [
@@ -342,5 +366,12 @@ class Linkedin
             'X-Restli-Protocol-Version' => config('social-media.linkedin.restli_protocol_version'),
             'LinkedIn-Version'          => config('social-media.linkedin.header_version'),
         ])->withToken($this->accessToken)->retry(1, 3000);
+    }
+
+    private function authorUrn(string $idOrUrn): string
+    {
+        return str_starts_with($idOrUrn, 'urn:li:')
+            ? $idOrUrn
+            : "urn:li:person:{$idOrUrn}";
     }
 }

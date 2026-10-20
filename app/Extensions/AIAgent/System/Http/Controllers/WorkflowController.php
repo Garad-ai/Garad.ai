@@ -8,6 +8,7 @@ use App\Domains\Engine\Enums\EngineEnum;
 use App\Domains\Entity\Facades\Entity;
 use App\Extensions\AIAgent\System\Engine\AIAgentActionRegistry;
 use App\Extensions\AIAgent\System\Enums\ChannelEnum;
+use App\Extensions\AIAgent\System\Enums\TriggerTypeEnum;
 use App\Extensions\AIAgent\System\Enums\WorkflowStatusEnum;
 use App\Extensions\AIAgent\System\Exceptions\PlanLimitExceededException;
 use App\Extensions\AIAgent\System\Http\Controllers\Concerns\ResolvesTemplateAvatars;
@@ -29,6 +30,7 @@ use App\Extensions\SocialMedia\System\Models\SocialMediaPlatform;
 use App\Extensions\SocialMediaAgent\System\Models\SocialMediaAgent;
 use App\Helpers\Classes\Helper;
 use App\Http\Controllers\Controller;
+use Cron\CronExpression;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -361,6 +363,68 @@ PROMPT;
         ]);
     }
 
+    public function createFromPrompt(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'prompt'   => ['required', 'string', 'max:2000'],
+            'channels' => ['nullable', 'array'],
+        ]);
+
+        $generated = $this->generateFromPrompt($request);
+        if (! $generated->isSuccessful()) {
+            return $generated;
+        }
+
+        $data = $generated->getData(true)['data'] ?? null;
+        if (! is_array($data)
+            || ! is_string($data['name'] ?? null)
+            || ! is_string($data['trigger_type'] ?? null)
+            || ! is_array($data['steps'] ?? null)) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => __('The generated workflow is incomplete and was not saved.'),
+            ], 422);
+        }
+
+        if ($data['trigger_type'] === TriggerTypeEnum::Schedule->value) {
+            $cron = $data['trigger_config']['cron'] ?? null;
+            if (! is_string($cron) || ! CronExpression::isValidExpression($cron)) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => __('The generated schedule is invalid and the workflow was not saved.'),
+                ], 422);
+            }
+        }
+
+        try {
+            $this->planService->checkWorkflowLimit(Auth::user());
+        } catch (PlanLimitExceededException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        }
+
+        $workflow = AIAgentWorkflow::query()->create([
+            'user_id'        => Auth::id(),
+            'name'           => $data['name'],
+            'description'    => $validated['prompt'],
+            'status'         => WorkflowStatusEnum::Paused->value,
+            'trigger_type'   => $data['trigger_type'],
+            'trigger_config' => $data['trigger_config'] ?? [],
+            'steps'          => $this->ensureStepIds($data['steps']),
+        ]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => __('Workflow saved as paused. Review it before enabling scheduled execution.'),
+            'data'    => [
+                'id'           => (string) $workflow->id,
+                'name'         => $workflow->name,
+                'status'       => $workflow->status->value,
+                'trigger_type' => $workflow->trigger_type->value,
+                'steps'        => $workflow->resolved_steps,
+            ],
+        ], 201);
+    }
+
     public function edit(AIAgentWorkflow $workflow): View
     {
         $this->authorize('update', $workflow);
@@ -471,6 +535,21 @@ PROMPT;
         $newStatus = $workflow->status === WorkflowStatusEnum::Active
             ? WorkflowStatusEnum::Paused
             : WorkflowStatusEnum::Active;
+
+        if ($newStatus === WorkflowStatusEnum::Active && $workflow->trigger_type === TriggerTypeEnum::Schedule) {
+            $triggerConfig = $workflow->trigger_config ?? [];
+            $cron = $triggerConfig['cron'] ?? null;
+            $runOnceAt = $triggerConfig['run_once_at'] ?? null;
+            if (
+                (! is_string($cron) || ! CronExpression::isValidExpression($cron))
+                && (! is_string($runOnceAt) || trim($runOnceAt) === '')
+            ) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => __('Configure a valid cron schedule before activating this workflow.'),
+                ], 422);
+            }
+        }
 
         $workflow->update(['status' => $newStatus->value]);
 

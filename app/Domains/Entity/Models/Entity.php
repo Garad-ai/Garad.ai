@@ -66,17 +66,21 @@ class Entity extends Model
     public static function planModels(): Collection|array
     {
         return once(static function () {
-            $planId = getCurrentActiveSubscription()?->getAttribute('plan_id') ?? 0;
+            $subscription = getCurrentActiveSubscription()
+                ?? getCurrentActiveSubscriptionYokkasa();
+            $planId = $subscription?->getAttribute('plan_id') ?? 0;
 
-            $query = self::query();
+            $query = self::query()
+                ->isEnabled()
+                ->where(function (Builder $query) use ($planId) {
+                    $query->where('is_selected', 1);
 
-            if ($planId == 0) {
-                $query->where('is_selected', 1);
-            } else {
-                $query->whereHas('aiFinance', function ($query) use ($planId) {
-                    $query->where('plan_id', $planId);
+                    if ((int) $planId !== 0) {
+                        $query->orWhereHas('aiFinance', function (Builder $query) use ($planId) {
+                            $query->where('plan_id', $planId);
+                        });
+                    }
                 });
-            }
 
             $query->whereHas('tokens', function ($query) {
                 $query->where('type', 'word');

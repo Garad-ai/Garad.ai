@@ -1,0 +1,284 @@
+/* Garad Chat Pro — Ultimate unified workspace
+   Additive UI layer: keeps native Laravel/Alpine controls alive and routes clicks to them. */
+
+.garad-ultimate-ready {
+    --garad-u-max: 900px;
+    --garad-u-radius: 26px;
+    --garad-u-border: hsl(var(--heading-foreground) / 0.10);
+    --garad-u-soft: hsl(var(--heading-foreground) / 0.045);
+    --garad-u-soft-2: hsl(var(--heading-foreground) / 0.075);
+    --garad-u-shadow: 0 12px 42px rgb(0 0 0 / 0.07);
+}
+
+/* Keep the workspace calm and centered without changing feature behavior. */
+.garad-ultimate-ready .lqd-chat-v2-container,
+.garad-ultimate-ready .conversation-area-wrap,
+.garad-ultimate-ready #load_chat_area_container {
+    background: hsl(var(--background));
+}
+
+.garad-ultimate-ready .lqd-chat-pro-header {
+    min-height: 56px;
+    border-bottom: 1px solid hsl(var(--heading-foreground) / 0.055);
+    background: hsl(var(--background) / 0.90);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+.garad-ultimate-ready .conversation-area,
+.garad-ultimate-ready .chat-container {
+    width: 100%;
+    max-width: var(--garad-u-max);
+    margin-inline: auto;
+}
+
+.garad-ultimate-ready .chat-content {
+    max-width: 100%;
+    font-size: 15.5px;
+    line-height: 1.75;
+}
+
+.garad-ultimate-ready .lqd-chat-ai-bubble,
+.garad-ultimate-ready .lqd-chat-ai-bubble .chat-content-container {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.garad-ultimate-ready .lqd-chat-user-bubble .chat-content-container {
+    border: 1px solid hsl(var(--heading-foreground) / 0.045) !important;
+    border-radius: 20px !important;
+    background: hsl(var(--heading-foreground) / 0.045) !important;
+    box-shadow: none !important;
+}
+
+/* Simplify the legacy composer while retaining all native controls in the DOM. */
+.garad-ultimate-ready #chat_form {
+    width: 100%;
+    max-width: var(--garad-u-max) !important;
+    margin-inline: auto !important;
+}
+
+.garad-ultimate-ready #chat_form .lqd-chat-form-inputs-container,
+.garad-ultimate-ready #chat_form .garad-chat-composer {
+    position: relative;
+    overflow: visible !important;
+    border: 1px solid var(--garad-u-border) !important;
+    border-radius: var(--garad-u-radius) !important;
+    background: hsl(var(--background)) !important;
+    box-shadow: 0 4px 22px rgb(0 0 0 / 0.055) !important;
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.garad-ultimate-ready #chat_form .lqd-chat-form-inputs-container:focus-within,
+.garad-ultimate-ready #chat_form .garad-chat-composer:focus-within {
+    border-color: hsl(var(--primary) / 0.34) !important;
+    box-shadow: 0 5px 28px rgb(0 0 0 / 0.07), 0 0 0 3px hsl(var(--primary) / 0.055) !important;
+}
+
+.garad-ultimate-ready #chat_form #prompt {
+    min-height: 62px !important;
+    padding-inline-start: 54px !important;
+    padding-inline-end: 116px !important;
+    padding-top: 18px !important;
+    padding-bottom: 18px !important;
+    border: 0 !important;
+    background: transparent !important;
+    font-size: 15px !important;
+    line-height: 1.55 !important;
+    box-shadow: none !important;
+}
+
+/* These are legacy visual shortcuts only. Their native actions remain available
+   through the unified + menu and hidden controls stay in the DOM. */
+.garad-ultimate-ready .garad-u-legacy-pill,
+.garad-ultimate-ready .garad-u-legacy-strip,
+.garad-ultimate-ready .garad-capability-strip,
+.garad-ultimate-ready .garad-chat-capabilities,
+.garad-ultimate-ready .garad-quick-tools,
+.garad-ultimate-ready .garad-u-native-create-picker {
+    display: none !important;
+}
+
+.garad-ultimate-ready #chat-options {
+    gap: 5px !important;
+}
+
+.garad-ultimate-ready #chat-options button,
+.garad-ultimate-ready #chat-options .lqd-realtime-chat-button,
+.garad-ultimate-ready #chat-options .lqd-chat-record-trigger,
+.garad-ultimate-ready #chat-options .lqd-chat-send-btn,
+.garad-ultimate-ready #chat-options .lqd-chat-stop-btn {
+    border-radius: 999px !important;
+    box-shadow: none !important;
+}
+
+/* Unified + trigger */
+.garad-u-plus {
+    position: absolute;
+    z-index: 8;
+    inset-inline-start: 14px;
+    bottom: 14px;
+    display: inline-grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: hsl(var(--heading-foreground) / 0.72);
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease, transform .15s ease;
+}
+
+.garad-u-plus:hover,
+.garad-u-plus[aria-expanded="true"] {
+    background: var(--garad-u-soft-2);
+    color: hsl(var(--heading-foreground));
+}
+
+.garad-u-plus:active { transform: scale(.94); }
+.garad-u-plus svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Selected mode chip; appears only when a create/research mode is active. */
+.garad-u-chip {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 29px;
+    margin: 9px 12px 0;
+    padding: 0 5px 0 9px;
+    border: 1px solid hsl(var(--primary) / 0.18);
+    border-radius: 999px;
+    background: hsl(var(--primary) / 0.065);
+    color: hsl(var(--heading-foreground));
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.garad-u-chip[hidden] { display: none !important; }
+.garad-u-chip-icon { display: grid; place-items: center; color: hsl(var(--primary)); }
+.garad-u-chip-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.garad-u-chip-clear { display: grid; width: 21px; height: 21px; place-items: center; padding: 0; border: 0; border-radius: 999px; background: transparent; color: inherit; opacity: .55; cursor: pointer; }
+.garad-u-chip-clear:hover { background: hsl(var(--heading-foreground) / .07); opacity: 1; }
+.garad-u-chip-clear svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* Command / tools palette */
+.garad-u-menu {
+    position: fixed;
+    z-index: 100000;
+    max-height: min(610px, calc(100vh - 32px));
+    overflow: hidden;
+    border: 1px solid hsl(var(--heading-foreground) / 0.10);
+    border-radius: 18px;
+    background: hsl(var(--background) / 0.985);
+    color: hsl(var(--heading-foreground));
+    box-shadow: 0 24px 75px rgb(0 0 0 / 0.16), 0 5px 18px rgb(0 0 0 / .08);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    transform-origin: bottom left;
+    animation: garad-u-in .14s ease-out;
+}
+
+.garad-u-menu[hidden] { display: none !important; }
+@keyframes garad-u-in { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
+
+.garad-u-menu-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 49px;
+    padding: 8px 10px 8px 13px;
+    border-bottom: 1px solid hsl(var(--heading-foreground) / 0.065);
+    background: hsl(var(--background) / .98);
+}
+
+.garad-u-search-icon { display: grid; place-items: center; color: hsl(var(--heading-foreground) / .45); }
+.garad-u-search-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.garad-u-menu-head input { flex: 1; min-width: 0; height: 34px; padding: 0; border: 0 !important; outline: 0 !important; background: transparent !important; color: hsl(var(--heading-foreground)); font-size: 13px; box-shadow: none !important; }
+.garad-u-menu-head input::placeholder { color: hsl(var(--heading-foreground) / .42); }
+.garad-u-menu-head kbd { padding: 3px 6px; border: 1px solid hsl(var(--heading-foreground) / .10); border-radius: 6px; background: var(--garad-u-soft); color: hsl(var(--heading-foreground) / .48); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.garad-u-menu-body { max-height: min(555px, calc(100vh - 88px)); overflow: auto; overscroll-behavior: contain; padding: 7px; scrollbar-width: thin; }
+.garad-u-group { padding: 4px 0 6px; }
+.garad-u-group + .garad-u-group { border-top: 1px solid hsl(var(--heading-foreground) / .055); padding-top: 8px; }
+.garad-u-group[hidden] { display: none !important; }
+.garad-u-group-title { padding: 3px 8px 6px; color: hsl(var(--heading-foreground) / .42); font-size: 9.5px; font-weight: 700; letter-spacing: .075em; text-transform: uppercase; }
+.garad-u-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; }
+
+.garad-u-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 52px;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: background .12s ease, transform .12s ease;
+}
+
+.garad-u-item[hidden] { display: none !important; }
+.garad-u-item:hover:not(:disabled), .garad-u-item:focus-visible:not(:disabled) { background: var(--garad-u-soft); outline: none; }
+.garad-u-item:active:not(:disabled) { transform: scale(.985); }
+.garad-u-item:disabled { opacity: .34; cursor: not-allowed; }
+.garad-u-item-icon { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border: 1px solid hsl(var(--heading-foreground) / .055); border-radius: 9px; background: hsl(var(--heading-foreground) / .035); color: hsl(var(--heading-foreground) / .75); }
+.garad-u-item-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.garad-u-item-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.garad-u-item-copy strong { overflow: hidden; font-size: 11.5px; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.garad-u-item-copy small { overflow: hidden; color: hsl(var(--heading-foreground) / .48); font-size: 9.5px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Make generated artifacts feel native to the chat rather than separate modules. */
+.garad-ultimate-ready .garad-result-card,
+.garad-ultimate-ready .garad-tool-result-card,
+.garad-ultimate-ready .garad-job-card,
+.garad-ultimate-ready .garad-media-result {
+    border-color: hsl(var(--heading-foreground) / .09) !important;
+    border-radius: 16px !important;
+    background: hsl(var(--background)) !important;
+    box-shadow: 0 5px 22px rgb(0 0 0 / .045) !important;
+}
+
+.garad-ultimate-ready .garad-response-actions { opacity: .46; }
+.garad-ultimate-ready .lqd-chat-ai-bubble:hover .garad-response-actions { opacity: 1; }
+
+/* Sidebar: conceptually closer to modern AI workspaces while leaving history/folders intact. */
+@media (min-width: 992px) {
+    .garad-ultimate-ready .chats-sidebar-wrap {
+        border-inline-end: 1px solid hsl(var(--heading-foreground) / .055) !important;
+        background: hsl(var(--heading-foreground) / .022) !important;
+        box-shadow: none !important;
+    }
+    .garad-ultimate-ready .lqd-chat-v2-sidebar {
+        border-inline-end-color: hsl(var(--heading-foreground) / .055) !important;
+        background: hsl(var(--heading-foreground) / .022) !important;
+    }
+    .garad-ultimate-ready .chats-sidebar-links a,
+    .garad-ultimate-ready .chats-sidebar-links button {
+        border-radius: 9px !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .garad-ultimate-ready #chat_form #prompt { min-height: 58px !important; padding-inline-start: 50px !important; padding-inline-end: 92px !important; font-size: 16px !important; }
+    .garad-u-plus { inset-inline-start: 10px; bottom: 12px; }
+    .garad-u-menu { left: 8px !important; right: 8px !important; width: auto !important; max-height: min(72vh, 560px); border-radius: 16px; }
+    .garad-u-menu-body { max-height: calc(min(72vh, 560px) - 49px); }
+    .garad-u-grid { grid-template-columns: 1fr; }
+    .garad-u-item { min-height: 49px; }
+    .garad-u-menu-head kbd { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .garad-u-menu, .garad-u-plus, .garad-u-item { animation: none !important; transition: none !important; }
+}

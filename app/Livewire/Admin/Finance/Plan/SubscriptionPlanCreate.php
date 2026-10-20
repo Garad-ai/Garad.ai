@@ -104,17 +104,26 @@ class SubscriptionPlanCreate extends Component
             'plan.blogpilot_limits.monthly_posts'             => 'nullable|integer|min:-1',
             'plan.voice_call_seconds_limit'                   => 'nullable|integer|min:-1',
             'plan.phone_call_agent_seconds_limit'             => 'nullable|integer|min:-1',
+            'plan.phone_call_agent_outbound_seconds_limit'    => 'nullable|integer|min:-1',
+            'plan.phone_call_agent_outbound_enabled'          => 'nullable|boolean',
+            'plan.phone_call_agent_outbound_calls_per_day'    => 'nullable|integer|min:-1',
+            'plan.phone_call_agent_follow_up_enabled'         => 'nullable|boolean',
             'plan.ai_chat_pro_connectors'                     => 'nullable|array',
             'plan.ai_chat_pro_connectors.*'                   => 'boolean',
             'plan.video_dubbing_seconds_limit'                => 'nullable|integer|min:-1',
+            'plan.video_agent_seconds_limit'                  => 'nullable|integer|min:-1',
+            'plan.video_agent_videos_limit'                   => 'nullable|integer|min:-1',
             'plan.deep_research_request_limit'                => 'nullable|integer|min:-1',
             'plan.ai_captions_access'                         => 'nullable|boolean',
             'plan.ai_captions_minutes'                        => 'nullable|integer|min:-1',
+            'plan.auto_edit_videos_seconds_limit'             => 'nullable|integer|min:-1',
+            'plan.auto_edit_videos_renders_limit'             => 'nullable|integer|min:-1',
             'plan.ugc_videos_limit'                           => 'nullable|integer|min:-1',
             'plan.marketing_bot_limits.max_contacts'          => 'nullable|integer|min:-1',
             'plan.marketing_bot_limits.monthly_messages'      => 'nullable|integer|min:-1',
             'plan.marketing_bot_limits.channels'              => 'nullable|array',
             'plan.marketing_bot_limits.channels.*'            => 'nullable|string|in:whatsapp,telegram',
+            'plan.marketing_bot_limits.agent_enabled'         => 'nullable|boolean',
             'plan.ai_agent_workflow_limit'                    => 'nullable|integer|min:-1',
             'plan.ai_agent_channel_limit'                     => 'nullable|integer|min:-1',
             'plan.ai_agent_message_limit'                     => 'nullable|integer|min:-1',
@@ -155,9 +164,6 @@ class SubscriptionPlanCreate extends Component
         return Entity::query()
             ->isEnabled()
             ->whereNotIn('key', [
-                EntityEnum::WHISPER_1,
-                EntityEnum::DALL_E_2,
-                EntityEnum::DALL_E_3,
                 EntityEnum::TTS_1,
                 EntityEnum::TTS_1_HD,
             ])->whereIn('engine', [
@@ -331,6 +337,8 @@ class SubscriptionPlanCreate extends Component
         if (empty($limits['channels'])) {
             $limits['channels'] = ['whatsapp', 'telegram'];
         }
+
+        $limits['agent_enabled'] = (bool) ($limits['agent_enabled'] ?? true);
 
         $this->plan->marketing_bot_limits = $limits;
     }

@@ -23,12 +23,16 @@ class AiPresentation extends Model
         'pptx_url',
         'error_message',
         'completed_at',
+        'credits_deducted_amount',
+        'credits_deducted_at',
     ];
 
     protected $casts = [
         'request_data'  => 'array',
         'response_data' => 'array',
-        'completed_at'  => 'datetime',
+        'completed_at'            => 'datetime',
+        'credits_deducted_amount' => 'float',
+        'credits_deducted_at'     => 'datetime',
     ];
 
     public function user(): BelongsTo

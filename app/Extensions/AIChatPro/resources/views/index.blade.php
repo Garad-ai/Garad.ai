@@ -131,6 +131,7 @@
     'disable_mobile_bottom_menu' => !$show_mobile_bottom_bar,
 ])
 
+
 @section('title')
     @switch($category?->slug)
         @case('ai_vision')
@@ -158,6 +159,128 @@
     @elseif ($category?->slug == 'ai_chat_image')
         {{ __('Seamlessly generate and craft a diverse array of images without ever leaving your chat environment.') }}
     @endif
+    <style id="garad-final-layout">
+        @media (min-width: 992px) {
+            html body #user_chat_area .chats-sidebar-wrap {
+                display: flex !important;
+                flex-direction: column !important;
+                width: 260px !important;
+                height: 100vh !important;
+                min-height: 0 !important;
+                overflow: hidden !important;
+            }
+
+            html body #user_chat_area .chats-sidebar-wrap > .chats-list-container {
+                display: flex !important;
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+
+            html body #user_chat_area .chats-sidebar-wrap > .garad-primary-nav,
+            html body #user_chat_area .chats-sidebar-wrap > .garad-sidebar-bottom,
+            html body #user_chat_area .chats-sidebar-wrap > .garad-sidebar-brand-row,
+            html body #user_chat_area .chats-sidebar-wrap > .garad-sidebar-topbar {
+                flex: 0 0 auto !important;
+            }
+
+            html body #user_chat_area .chats-sidebar-wrap .chats-list-container > .card-body,
+            html body #user_chat_area .chats-sidebar-wrap #chat_sidebar_container,
+            html body #user_chat_area .chats-sidebar-wrap .chat-list-wrapper {
+                display: flex !important;
+                flex: 1 1 auto !important;
+                flex-direction: column !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+
+            html body #user_chat_area .chats-sidebar-wrap .garad-sidebar-scroll {
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+
+            html body #user_chat_area .chats-sidebar-wrap > .garad-sidebar-bottom {
+                display: flex !important;
+                flex-direction: column !important;
+                margin-top: auto !important;
+                position: static !important;
+            }
+
+            body .lqd-chat-v2-container .chats-sidebar-wrap {
+                display: flex !important;
+                flex-direction: column !important;
+                width: 260px !important;
+                height: 100vh !important;
+                min-height: 0 !important;
+                overflow: hidden !important;
+            }
+
+            body .lqd-chat-v2-container .garad-sidebar-brand-row,
+            body .lqd-chat-v2-container .garad-sidebar-topbar,
+            body .lqd-chat-v2-container .garad-primary-nav {
+                flex: 0 0 auto !important;
+            }
+
+            body .lqd-chat-v2-container .chats-list-container {
+                display: flex !important;
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+
+            body .lqd-chat-v2-container .chats-list-container > .card-body,
+            body .lqd-chat-v2-container #chat_sidebar_container,
+            body .lqd-chat-v2-container .chat-list-wrapper {
+                display: flex !important;
+                flex: 1 1 auto !important;
+                flex-direction: column !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+
+            body .lqd-chat-v2-container .garad-sidebar-scroll {
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+
+            body .lqd-chat-v2-container .garad-sidebar-bottom {
+                display: flex !important;
+                flex: 0 0 auto !important;
+                flex-direction: column !important;
+                min-height: 0 !important;
+                height: auto !important;
+                margin-top: auto !important;
+                position: static !important;
+            }
+
+            body .lqd-chat-v2-container .conversation-area-wrap {
+                min-width: 0 !important;
+                min-height: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+            }
+        }
+
+        body .lqd-chat-v2-container .lqd-chat-form-wrap {
+            contain: layout paint;
+        }
+
+        body .lqd-chat-v2-container #prompt {
+            resize: none !important;
+            max-height: 300px !important;
+            overflow-y: auto !important;
+        }
+    </style>
 @endsection
 
 @if (filled($typoCss))
@@ -307,8 +430,8 @@
              folders, rename/pin/delete, voice, attachments and message logic stay intact. */
 
             .lqd-chat-v2-container {
-                --garad-sidebar-open-width: 264px;
-                --garad-rail-width: 52px;
+                --garad-sidebar-open-width: 282px;
+                --garad-rail-width: 50px;
                 --sidebar-w: var(--garad-rail-width);
                 min-height: 100vh;
                 background: hsl(var(--background));
@@ -699,10 +822,20 @@
                 height: 28px;
                 min-width: 28px;
                 place-items: center;
-                overflow: hidden;
+                display: flex;
+                align-items: center;
                 border: 1px solid hsl(var(--border));
                 border-radius: 999px;
                 background: hsl(var(--heading-foreground) / 0.035);
+
+            .garad-sidebar-brand img,
+            .garad-sidebar-brand svg,
+            .garad-sidebar-brand > * {
+                margin-inline-start: 0 !important;
+                margin-inline-end: auto !important;
+                justify-content: flex-start !important;
+                text-align: start !important;
+            }
             }
 
             .garad-sidebar-profile-avatar img {
@@ -1069,21 +1202,1308 @@
     @endpush
 @endif
 
+
+@push('css')
+    <style>
+        .lqd-chat-v2 {
+            --garad-ink: #141414;
+            --garad-muted: #77736d;
+            --garad-line: rgba(20, 20, 20, .09);
+            --garad-soft: #f7f6f3;
+            background: #fbfaf8 !important;
+        }
+
+        .dark .lqd-chat-v2 {
+            --garad-ink: #f5f4f0;
+            --garad-muted: #a4a19a;
+            --garad-line: rgba(255, 255, 255, .1);
+            --garad-soft: rgba(255, 255, 255, .055);
+            background: #101010 !important;
+        }
+
+        .garad-mode-switch {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 3px;
+            margin: 0 20px 22px;
+            padding: 3px;
+            border: 1px solid var(--garad-line);
+            border-radius: 11px;
+            background: var(--garad-soft);
+        }
+
+        .garad-mode-switch-item {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 34px;
+            border-radius: 8px;
+            color: var(--garad-muted);
+            font-size: 12px;
+            font-weight: 650;
+            text-decoration: none;
+            transition: color .18s ease, background .18s ease, box-shadow .18s ease;
+        }
+
+        .garad-mode-switch-item:hover,
+        .garad-mode-switch-item.is-active {
+            color: var(--garad-ink);
+            background: hsl(var(--background));
+            box-shadow: 0 1px 5px rgba(20, 20, 20, .08);
+        }
+
+        .garad-primary-nav-label {
+            margin: 0 28px 9px;
+            color: var(--garad-muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+        }
+
+        .garad-primary-nav {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 3px !important;
+            margin: 0 10px 6px;
+            padding: 7px 0 8px !important;
+            border-top: 1px solid var(--garad-line);
+            border-bottom: 1px solid var(--garad-line);
+        }
+
+        .chats-sidebar-wrap > .garad-sidebar-bottom {
+            order: 3;
+            margin-top: auto !important;
+            flex: 0 0 auto !important;
+        }
+
+        .garad-primary-nav .garad-mode-switch {
+            margin: 0 8px 7px;
+        }
+
+        .garad-primary-nav-item {
+            min-height: 38px !important;
+            border-radius: 9px !important;
+            color: var(--garad-muted) !important;
+            font-size: 12px !important;
+        }
+
+        .garad-primary-nav-item:hover {
+            background: var(--garad-soft) !important;
+            color: var(--garad-ink) !important;
+        }
+
+        .chats-sidebar-wrap {
+            --garad-sidebar-open-width: 260px;
+            width: 260px !important;
+            max-width: 260px !important;
+        }
+
+        .chats-sidebar-wrap > .garad-primary-nav {
+            order: 1;
+        }
+
+        .chats-sidebar-wrap > .chats-list-container {
+            order: 2;
+        }
+
+        .garad-sidebar-brand-row,
+        .garad-sidebar-topbar {
+            min-height: 46px !important;
+        }
+
+        .garad-sidebar-topbar {
+            padding: 5px 8px 4px !important;
+        }
+
+        .garad-sidebar-new-chat {
+            width: calc(100% - 16px) !important;
+            margin-inline: 8px !important;
+            height: 38px !important;
+            font-size: 12px !important;
+        }
+
+        .garad-sidebar-section-label {
+            margin-top: 12px !important;
+            margin-bottom: 5px !important;
+            padding-inline: 8px !important;
+            font-size: 10px !important;
+            letter-spacing: .08em !important;
+        }
+
+        .garad-sidebar-chat-row,
+        .garad-project-row {
+            min-height: 32px !important;
+            margin: 1px 2px !important;
+            border-radius: 7px !important;
+        }
+
+        .garad-sidebar-chat-row .chat-list-item-trigger,
+        .garad-project-open {
+            min-height: 32px !important;
+            padding: 5px 7px !important;
+            gap: 7px !important;
+            font-size: 11.5px !important;
+        }
+
+        .garad-sidebar-chat-row .garad-chat-row-icon,
+        .garad-project-open svg {
+            width: 14px !important;
+            height: 14px !important;
+        }
+
+        .garad-sidebar-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: hsl(var(--foreground) / .18) transparent;
+        }
+
+        .garad-sidebar-brand-row {
+            position: relative;
+            display: flex !important;
+            align-items: center;
+            justify-content: flex-start !important;
+            gap: 3px;
+            min-height: 42px !important;
+            padding: 4px 8px !important;
+            border-bottom: 0 !important;
+        }
+
+        .garad-sidebar-brand {
+            width: 104px !important;
+            min-width: 104px !important;
+            max-width: 104px !important;
+            flex: 0 0 104px !important;
+            overflow: hidden;
+            justify-content: flex-start !important;
+            text-align: start !important;
+        }
+
+        .garad-sidebar-brand img,
+        .garad-sidebar-brand svg,
+        .garad-sidebar-brand > * {
+            width: auto !important;
+            max-width: 96px !important;
+            max-height: 28px !important;
+            margin-inline-start: 0 !important;
+            margin-inline-end: auto !important;
+            justify-content: flex-start !important;
+            text-align: start !important;
+        }
+
+        .garad-sidebar-brand img.hidden.dark\:block {
+            display: none !important;
+        }
+
+        .garad-sidebar-brand img.dark\:hidden {
+            display: block !important;
+        }
+
+        html.dark .garad-sidebar-brand img.dark\:hidden {
+            display: none !important;
+        }
+
+        html.dark .garad-sidebar-brand img.hidden.dark\:block {
+            display: block !important;
+        }
+
+        .garad-sidebar-brand img {
+            margin-inline-start: 0 !important;
+            margin-inline-end: auto !important;
+        }
+
+        .garad-sidebar-search-toggle,
+        .garad-sidebar-collapse-btn {
+            display: inline-grid !important;
+            width: 30px !important;
+            height: 30px !important;
+            min-width: 30px !important;
+            place-items: center;
+            padding: 0 !important;
+            border: 0 !important;
+            border-radius: 8px !important;
+            background: transparent !important;
+            color: hsl(var(--foreground) / .65) !important;
+            cursor: pointer;
+        }
+
+        .garad-sidebar-search-toggle {
+            position: absolute;
+            inset-inline-end: 58px !important;
+            top: 11px;
+        }
+
+        .garad-sidebar-collapse-btn {
+            position: absolute !important;
+            inset-inline-end: 6px !important;
+            top: 8px;
+        }
+
+        .garad-sidebar-search-toggle:hover,
+        .garad-sidebar-collapse-btn:hover {
+            background: hsl(var(--foreground) / .07) !important;
+            color: hsl(var(--heading-foreground)) !important;
+        }
+
+        .garad-sidebar-search-popover {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px 6px;
+            background: hsl(var(--background));
+        }
+
+        .garad-sidebar-search-popover.is-open {
+            display: flex;
+        }
+
+        .garad-sidebar-search-popover .navbar-search-input {
+            height: 32px !important;
+            min-height: 32px !important;
+            border: 0 !important;
+            border-radius: 8px !important;
+            background: hsl(var(--foreground) / .055) !important;
+            font-size: 11px !important;
+        }
+
+        .garad-sidebar-search-popover .chats-search-form {
+            min-width: 0;
+        }
+
+        .chats-sidebar-wrap,
+        .chats-list-container,
+        .garad-unified-sidebar-body {
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: hsl(var(--background)) !important;
+        }
+
+        /* Fixed shell: top controls and profile stay visible; only history scrolls. */
+        @media (min-width: 992px) {
+            .lqd-chat-v2-container.garad-sidebar-closed .chats-sidebar-wrap {
+                display: none !important;
+            }
+
+            .lqd-chat-v2-container.garad-sidebar-open .chats-sidebar-wrap {
+                display: block !important;
+            }
+
+            .lqd-chat-v2-container.garad-sidebar-closed #user_chat_area .lqd-chat-form-wrap {
+                left: var(--garad-rail-width, 50px) !important;
+                inset-inline-start: var(--garad-rail-width, 50px) !important;
+            }
+
+            .lqd-chat-v2-container.garad-sidebar-open #user_chat_area .lqd-chat-form-wrap {
+                left: var(--garad-sidebar-open-width, 260px) !important;
+                inset-inline-start: var(--garad-sidebar-open-width, 260px) !important;
+            }
+
+            #user_chat_area .chats-sidebar-wrap {
+                display: flex !important;
+                flex-direction: column !important;
+                overflow: hidden !important;
+                overflow-x: hidden !important;
+                height: 100vh !important;
+            }
+
+            .garad-sidebar-brand-row {
+                flex: 0 0 auto !important;
+                background: hsl(var(--background)) !important;
+            }
+
+            #user_chat_area .garad-sidebar-topbar,
+            #user_chat_area .garad-primary-nav,
+            #user_chat_area .garad-sidebar-search-popover {
+                flex: 0 0 auto !important;
+            }
+
+            #user_chat_area .chats-list-container {
+                flex: 1 1 auto !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: hidden !important;
+            }
+
+            #user_chat_area .garad-sidebar-bottom {
+                display: flex !important;
+                flex: 0 0 auto !important;
+                height: auto !important;
+                min-height: 0 !important;
+                margin-top: auto !important;
+                overflow: visible !important;
+            }
+
+            #user_chat_area .chats-list-container > .card-body,
+            #user_chat_area #chat_sidebar_container,
+            #user_chat_area .chat-list-wrapper {
+                display: flex !important;
+                flex-direction: column !important;
+                flex: 1 1 auto !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: hidden !important;
+            }
+
+            #user_chat_area .garad-sidebar-scroll {
+                flex: 1 1 auto !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                scrollbar-width: thin;
+                scrollbar-color: hsl(var(--foreground) / .2) transparent;
+            }
+
+            #user_chat_area .garad-sidebar-bottom {
+                display: flex !important;
+                flex-direction: column !important;
+            }
+
+            #user_chat_area .garad-sidebar-topbar,
+            #user_chat_area .garad-primary-nav,
+            #user_chat_area .garad-sidebar-search-popover,
+            #user_chat_area .garad-sidebar-bottom {
+                overflow: visible !important;
+            }
+
+            #user_chat_area .chats-list-container,
+            #user_chat_area .garad-sidebar-bottom {
+                border-radius: 0 !important;
+            }
+        }
+
+        .garad-sidebar-brand-row .garad-sidebar-brand {
+            justify-content: flex-start !important;
+            margin-inline-end: auto !important;
+        }
+
+        /* removed duplicated legacy sidebar block that forced full-column scrolling */
+
+        /* The model-only header stays visually clean without divider rules. */
+        .lqd-chat-pro-header,
+        .lqd-chat-pro-header.border-b {
+            display: none !important;
+            height: 64px !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+
+        .lqd-chat-pro-header hr {
+            display: none !important;
+        }
+
+        .lqd-chat-pro-header::before,
+        .lqd-chat-pro-header::after {
+            display: none !important;
+        }
+
+        .lqd-chat-pro-header,
+        .garad-workspace-head,
+        .garad-workspace-head::before,
+        .garad-workspace-head::after {
+            border: 0 !important;
+            border-bottom: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .lqd-header,
+        .lqd-titlebar {
+            display: none !important;
+        }
+
+        .lqd-page-content-container,
+        .lqd-page-content-wrap,
+        .lqd-chat-v2-container,
+        .lqd-chat-pro-header,
+        .garad-workspace-head {
+            border-top: 0 !important;
+            border-bottom: 0 !important;
+            outline: 0 !important;
+        }
+
+        .conversation-area-wrap {
+            background: radial-gradient(circle at 50% 22%, rgba(205, 192, 170, .14), transparent 33%), #fbfaf8 !important;
+        }
+
+        .dark .conversation-area-wrap {
+            background: radial-gradient(circle at 50% 22%, rgba(104, 91, 70, .13), transparent 33%), #101010 !important;
+        }
+
+        .garad-empty-state {
+            justify-content: center !important;
+            padding-top: 3rem !important;
+            padding-bottom: 7rem !important;
+        }
+
+        .garad-empty-copy {
+            max-width: 620px;
+            margin: 0 auto 26px;
+        }
+
+        .garad-empty-kicker {
+            margin-bottom: 13px;
+            color: var(--garad-muted) !important;
+            font-size: 12px !important;
+            font-weight: 700;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+        }
+
+        .garad-empty-copy h2 {
+            margin: 0 !important;
+            color: var(--garad-ink) !important;
+            font-size: clamp(30px, 4vw, 47px) !important;
+            font-weight: 520 !important;
+            letter-spacing: -.045em;
+            transition: opacity .18s ease, transform .18s ease;
+        }
+
+        .garad-empty-copy h2.is-changing {
+            opacity: .25;
+            transform: translateY(4px);
+        }
+
+        .garad-empty-copy p {
+            max-width: 500px;
+            margin: 13px auto 0;
+            color: var(--garad-muted) !important;
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        .garad-empty-suggestions {
+            width: min(100%, 700px);
+        }
+
+        .garad-suggestion-toggle {
+            display: none !important;
+        }
+
+        .garad-starter-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 9px;
+        }
+
+        .garad-starter-card {
+            min-height: 66px;
+            padding: 13px 14px;
+            border: 1px solid var(--garad-line);
+            border-radius: 12px;
+            background: hsl(var(--background) / .72);
+            color: var(--garad-ink);
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.35;
+            text-align: left;
+            transition: border-color .18s ease, transform .18s ease, background .18s ease;
+        }
+
+        .garad-starter-card:hover {
+            border-color: hsl(var(--primary) / .34);
+            background: hsl(var(--primary) / .06);
+            transform: translateY(-2px);
+        }
+
+        .garad-chat-composer {
+            border: 1px solid var(--garad-line) !important;
+            border-radius: 17px !important;
+            background: hsl(var(--background) / .94) !important;
+            box-shadow: 0 12px 38px rgba(20, 20, 20, .08) !important;
+        }
+
+        .garad-chat-composer:focus-within {
+            border-color: hsl(var(--primary) / .32) !important;
+            box-shadow: 0 15px 42px rgba(20, 20, 20, .12), 0 0 0 3px hsl(var(--primary) / .06) !important;
+        }
+
+        /* Keep the writing surface anchored to the viewport while the conversation scrolls above it. */
+        .lqd-chat-form-wrap {
+            position: fixed !important;
+            inset-inline: var(--sidebar-w, 0px) 0;
+            bottom: 0;
+            z-index: 80;
+            padding: 12px 0 18px !important;
+            background: linear-gradient(to bottom, transparent, hsl(var(--background) / .96) 28%) !important;
+        }
+
+        #user_chat_area {
+            padding-bottom: 112px !important;
+        }
+
+        .garad-empty-state {
+            justify-content: flex-start !important;
+            padding-top: clamp(52px, 11vh, 128px) !important;
+            padding-bottom: 150px !important;
+        }
+
+        .garad-empty-copy {
+            margin-bottom: 22px !important;
+        }
+
+        @media (max-width: 991px) {
+            .lqd-chat-form-wrap {
+                inset-inline-start: 0;
+                padding-inline: 8px !important;
+                padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+            }
+
+            #user_chat_area {
+                padding-bottom: 106px !important;
+            }
+        }
+
+        /* Final structural pass: stable shell, independent history scroll, and
+           a single Claude-style composer surface. */
+        @media (min-width: 992px) {
+            .lqd-chat-v2-container {
+                height: 100vh !important;
+                min-height: 100vh !important;
+                overflow: hidden !important;
+            }
+
+            .lqd-chat-v2-container .chats-sidebar-wrap {
+                display: flex !important;
+                flex-direction: column !important;
+                width: 260px !important;
+                height: 100vh !important;
+                min-height: 0 !important;
+                overflow: hidden !important;
+            }
+
+            .lqd-chat-v2-container .garad-sidebar-brand-row,
+            .lqd-chat-v2-container .garad-sidebar-topbar,
+            .lqd-chat-v2-container .garad-primary-nav {
+                flex: 0 0 auto !important;
+            }
+
+            .lqd-chat-v2-container .chats-list-container {
+                display: flex !important;
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+
+            .lqd-chat-v2-container .chats-list-container > .card-body,
+            .lqd-chat-v2-container #chat_sidebar_container,
+            .lqd-chat-v2-container .chat-list-wrapper {
+                display: flex !important;
+                flex: 1 1 auto !important;
+                flex-direction: column !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+
+            .lqd-chat-v2-container .garad-sidebar-scroll {
+                flex: 1 1 auto !important;
+                min-height: 0 !important;
+                height: auto !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+
+            .lqd-chat-v2-container .garad-sidebar-bottom {
+                position: static !important;
+                flex: 0 0 auto !important;
+                margin-top: auto !important;
+                height: auto !important;
+                min-height: 0 !important;
+            }
+        }
+
+        .lqd-chat-v2-container .garad-chat-composer {
+            overflow: visible !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        .lqd-chat-v2-container #prompt {
+            min-height: 68px !important;
+            max-height: 300px !important;
+            overflow-y: auto !important;
+            resize: none !important;
+            align-self: stretch !important;
+        }
+
+        .lqd-chat-v2-container #chat_form .lqd-chat-form-inputs-container > .relative {
+            align-items: flex-end !important;
+        }
+
+        .lqd-chat-v2-container #chat-options {
+            min-height: 36px !important;
+            align-items: center !important;
+        }
+
+        .lqd-chat-v2-container #chat-options .garad-composer-model-control {
+            width: auto !important;
+            min-width: 150px !important;
+            max-width: none !important;
+            flex: 0 0 auto !important;
+        }
+
+        .lqd-chat-v2-container #chat-options .garad-claude-model-menu {
+            width: min(380px, calc(100vw - 24px)) !important;
+            max-height: min(480px, calc(100vh - 120px)) !important;
+            overflow: hidden !important;
+        }
+
+        .lqd-chat-v2-container #chat-options .garad-claude-model-list {
+            width: 100% !important;
+            max-height: min(310px, calc(100vh - 260px)) !important;
+            overflow-y: auto !important;
+        }
+
+        .lqd-chat-v2-container #chat-options .garad-claude-model-option {
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            min-height: 48px !important;
+            max-height: none !important;
+            height: auto !important;
+            padding: 9px 12px !important;
+            box-sizing: border-box !important;
+        }
+
+        .lqd-chat-v2-container #chat-options .garad-model-option-copy {
+            width: 100% !important;
+            min-width: 0 !important;
+            flex: 1 1 auto !important;
+            overflow: hidden !important;
+        }
+
+        @media (max-width: 767px) {
+            .garad-empty-state { padding-top: 44px !important; padding-bottom: 130px !important; }
+            .garad-empty-copy h2 { font-size: 32px !important; }
+            .garad-empty-copy p { font-size: 13px; }
+            .garad-starter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .garad-starter-card { min-height: 58px; padding: 11px; }
+        }
+
+        .garad-chat-composer {
+            overflow: hidden;
+            border-color: color-mix(in srgb, currentColor 8%, transparent) !important;
+        }
+
+        .garad-chat-composer:focus-within {
+            border-color: hsl(var(--primary) / .35) !important;
+            box-shadow: 0 10px 45px rgba(0, 0, 0, .055), 0 0 0 3px hsl(var(--primary) / .07) !important;
+        }
+
+        .garad-capability-strip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            overflow-x: auto;
+            padding: 9px 12px 2px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .garad-capability-strip::-webkit-scrollbar { display: none; }
+
+        .garad-capability-btn {
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 6px;
+            min-height: 30px;
+            padding: 5px 9px;
+            border: 1px solid hsl(var(--foreground) / .07);
+            border-radius: 999px;
+            background: hsl(var(--foreground) / .025);
+            color: hsl(var(--heading-foreground));
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1;
+            white-space: nowrap;
+            transition: transform .16s ease, border-color .16s ease, background .16s ease, color .16s ease;
+        }
+
+        .garad-capability-btn:hover,
+        .garad-capability-btn:focus-visible {
+            border-color: hsl(var(--primary) / .25);
+            background: hsl(var(--primary) / .07);
+            color: hsl(var(--primary));
+            outline: none;
+        }
+
+        .garad-capability-btn:active { transform: scale(.97); }
+
+        .garad-capability-upload {
+            background: hsl(var(--primary) / .065);
+            border-color: hsl(var(--primary) / .12);
+        }
+
+        .garad-chat-composer.is-dragging {
+            border-color: hsl(var(--primary) / .55) !important;
+            background: hsl(var(--primary) / .035) !important;
+        }
+
+        .garad-tool-result-card {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: min(100%, 520px);
+            margin: 10px 0;
+            padding: 14px 16px;
+            border: 1px solid hsl(var(--foreground) / .08);
+            border-radius: 16px;
+            background: hsl(var(--foreground) / .025);
+            box-shadow: 0 6px 24px rgba(0, 0, 0, .035);
+        }
+
+        .garad-tool-result-card strong {
+            color: hsl(var(--heading-foreground));
+            font-size: 13px;
+        }
+
+        .garad-tool-result-card span {
+            color: hsl(var(--foreground) / .64);
+            font-size: 12px;
+        }
+
+        .garad-tool-result-card a {
+            display: inline-flex;
+            width: fit-content;
+            margin-top: 3px;
+            padding: 7px 11px;
+            border-radius: 9px;
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground)) !important;
+            font-size: 11px;
+            font-weight: 700;
+            text-decoration: none !important;
+        }
+
+        .lqd-chat-ai-bubble .chat-content img {
+            max-width: min(100%, 720px);
+            height: auto;
+            border-radius: 16px;
+        }
+
+        #chat-attachment-previews.active {
+            border-bottom: 1px solid hsl(var(--foreground) / .055);
+            background: hsl(var(--foreground) / .015);
+        }
+
+        @media (max-width: 767px) {
+            .garad-capability-strip { padding-inline: 9px; }
+            .garad-capability-btn { padding: 5px 8px; }
+            .garad-capability-btn span { font-size: 10px; }
+        }
+    </style>
+@endpush
+
+@push('before-head-close')
+    <link rel="stylesheet" href="{{ asset('/vendor/garad-chat-pro-2/chat-pro-2.css') }}?v=2.9.0">
+@endpush
+
 @section('content')
+    <style>
+        #user_chat_area .lqd-chat-form-wrap {
+            position: fixed !important;
+            top: auto !important;
+            right: 0 !important;
+            bottom: 44px !important;
+            left: var(--garad-chat-left, 0px) !important;
+            inset-inline: var(--garad-chat-left, 0px) 0 !important;
+            width: auto !important;
+            z-index: 120 !important;
+            transform: none !important;
+        }
+
+        #user_chat_area.garad-has-prompt-text .lqd-chat-form-wrap {
+            bottom: 24px !important;
+        }
+
+        #user_chat_area .conversation-area,
+        #user_chat_area .conversation-area-wrap {
+            padding-bottom: 194px !important;
+        }
+
+        #user_chat_area.garad-has-prompt-text .conversation-area,
+        #user_chat_area.garad-has-prompt-text .conversation-area-wrap {
+            padding-bottom: 170px !important;
+        }
+
+        #user_chat_area #chat_form {
+            width: min(calc(100% - 32px), 650px) !important;
+            max-width: 650px !important;
+            padding-bottom: 0 !important;
+        }
+
+        #user_chat_area #chat_form .lqd-chat-form-inputs-container {
+            min-height: 92px !important;
+            border-radius: 28px !important;
+        }
+
+        #user_chat_area #chat_form .lqd-chat-form-inputs-container > .relative {
+            min-height: 88px !important;
+            align-items: stretch !important;
+            padding-bottom: 4px !important;
+        }
+
+        #user_chat_area #chat_form .lqd-chat-form-inputs-container .lqd-input-container {
+            min-height: 80px !important;
+        }
+
+        #user_chat_area #chat_form .lqd-chat-form-inputs-container > .relative > .pointer-events-none.absolute.bottom-2 {
+            transform: none !important;
+            bottom: 10px !important;
+            inset-inline: 10px !important;
+            align-items: flex-end !important;
+        }
+
+        #user_chat_area #chat-options .garad-composer-model-control {
+            display: inline-flex;
+            align-items: center;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            flex: 0 1 auto !important;
+            order: -1;
+        }
+
+        #user_chat_area #chat-options {
+            min-height: 34px !important;
+            align-items: center !important;
+            gap: 6px !important;
+        }
+
+        #user_chat_area #chat-options > * {
+            align-self: center !important;
+        }
+
+        #user_chat_area #chat-options .garad-claude-model-trigger,
+        #user_chat_area #chat-options .lqd-chat-temp-btn,
+        #user_chat_area #chat-options .lqd-chat-record-trigger,
+        #user_chat_area #chat-options .lqd-chat-record-stop-trigger,
+        #user_chat_area #chat-options .lqd-chat-send-btn,
+        #user_chat_area #chat-options .lqd-chat-stop-btn {
+            height: 34px !important;
+        }
+
+        #user_chat_area #chat-options .garad-claude-model-picker,
+        #user_chat_area #chat-options .garad-claude-model-inner {
+            display: inline-flex !important;
+            position: relative !important;
+            min-width: 0 !important;
+            gap: 6px !important;
+            align-items: center !important;
+        }
+
+        #user_chat_area #chat-options .garad-claude-model-trigger {
+            height: 34px !important;
+            min-width: 148px !important;
+            max-width: 190px !important;
+            padding: 0 10px !important;
+            border-radius: 10px !important;
+            background: transparent !important;
+            border: 1px solid hsl(var(--foreground) / .14) !important;
+            color: hsl(var(--foreground) / .82) !important;
+            font-size: 11px !important;
+            line-height: 1 !important;
+        }
+
+        #user_chat_area #chat-options .garad-claude-model-trigger-copy {
+            min-width: 0 !important;
+        }
+
+        #user_chat_area #chat-options .garad-claude-model-trigger-label {
+            display: block !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+        }
+
+        #user_chat_area #chat-options .garad-claude-model-menu {
+            top: auto !important;
+            right: 0 !important;
+            bottom: calc(100% + 10px) !important;
+            left: auto !important;
+            width: min(360px, calc(100vw - 24px)) !important;
+        }
+
+        #user_chat_area .garad-claude-model-option {
+            min-height: 46px !important;
+            height: auto !important;
+            white-space: normal !important;
+            line-height: 1.25 !important;
+        }
+
+        #user_chat_area .garad-claude-model-list {
+            display: flex;
+            flex-direction: column !important;
+            gap: 2px !important;
+            max-height: 280px !important;
+            overflow-y: auto !important;
+        }
+
+        #user_chat_area .garad-claude-model-menu {
+            overflow: visible !important;
+            z-index: 300 !important;
+            width: min(360px, calc(100vw - 24px)) !important;
+            max-height: 430px !important;
+            box-sizing: border-box !important;
+        }
+
+        #user_chat_area .garad-claude-model-list {
+            display: flex;
+            width: 100% !important;
+            min-width: 0 !important;
+            flex: 1 1 auto !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 2px !important;
+            overflow-y: auto !important;
+            box-sizing: border-box !important;
+        }
+
+        #user_chat_area .garad-claude-model-option {
+            display: flex !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            flex: 0 0 auto !important;
+            min-height: 46px !important;
+            height: auto !important;
+            max-width: none !important;
+            align-items: center !important;
+        }
+
+        #user_chat_area .garad-model-option-copy {
+            display: flex !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            flex: 1 1 auto !important;
+            flex-direction: column !important;
+            gap: 3px !important;
+            overflow: hidden !important;
+        }
+
+        #user_chat_area #chat-options .garad-claude-model-menu .garad-claude-model-option {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 100% !important;
+            flex-basis: auto !important;
+            height: auto !important;
+            min-height: 46px !important;
+            max-height: none !important;
+            padding: 9px 10px !important;
+            box-sizing: border-box !important;
+        }
+
+        #user_chat_area .garad-model-option-copy strong,
+        #user_chat_area .garad-model-option-copy small {
+            display: block !important;
+            width: 100% !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            line-height: 1.25 !important;
+        }
+
+        #user_chat_area #chat_form #prompt {
+            max-height: 210px !important;
+            min-height: 78px !important;
+            line-height: 1.38 !important;
+            padding-top: 16px !important;
+            padding-bottom: 42px !important;
+            padding-inline-start: 64px !important;
+            padding-inline-end: 132px !important;
+        }
+
+        #user_chat_area.conversation-not-started .lqd-chat-form-wrap {
+            bottom: clamp(220px, 39vh, 340px) !important;
+        }
+
+        #user_chat_area.conversation-not-started.garad-has-prompt-text .lqd-chat-form-wrap {
+            bottom: 24px !important;
+        }
+
+        #user_chat_area.conversation-not-started .garad-empty-state {
+            justify-content: center !important;
+            padding-top: clamp(52px, 9vh, 112px) !important;
+            padding-bottom: clamp(176px, 24vh, 250px) !important;
+        }
+
+        #user_chat_area.conversation-not-started .garad-empty-copy {
+            margin-bottom: 10px !important;
+            max-width: 780px !important;
+        }
+
+        #user_chat_area .garad-primary-nav {
+            margin: 0 8px 2px !important;
+            padding: 6px 0 6px !important;
+            gap: 2px !important;
+        }
+
+        #user_chat_area .garad-sidebar-scroll {
+            padding: 2px 8px 12px !important;
+            scrollbar-width: thin !important;
+            scrollbar-color: hsl(var(--foreground) / .16) transparent !important;
+        }
+
+        #user_chat_area .garad-sidebar-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #user_chat_area .garad-sidebar-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #user_chat_area .garad-sidebar-scroll::-webkit-scrollbar-thumb {
+            background: hsl(var(--foreground) / .16);
+            border-radius: 999px;
+        }
+
+        #user_chat_area .garad-sidebar-group {
+            padding: 3px 0 6px !important;
+            margin: 0 !important;
+        }
+
+        #user_chat_area .garad-sidebar-group + .garad-sidebar-group {
+            margin-top: 2px !important;
+        }
+
+        #user_chat_area .garad-sidebar-section-head {
+            min-height: 24px !important;
+            padding: 0 6px !important;
+            margin-bottom: 2px !important;
+        }
+
+        #user_chat_area .garad-sidebar-section-label {
+            margin-top: 8px !important;
+            margin-bottom: 3px !important;
+            padding-inline: 6px !important;
+            font-size: 9.5px !important;
+            letter-spacing: .075em !important;
+            line-height: 1.1 !important;
+        }
+
+        #user_chat_area .garad-project-row,
+        #user_chat_area .garad-sidebar-chat-row {
+            min-height: 31px !important;
+            margin: 0 1px !important;
+            border-radius: 7px !important;
+        }
+
+        #user_chat_area .garad-project-open,
+        #user_chat_area .garad-sidebar-chat-row .chat-list-item-trigger {
+            min-height: 31px !important;
+            padding: 5px 7px !important;
+        }
+
+        @media (max-width: 991px) {
+            #user_chat_area .lqd-chat-form-wrap {
+                left: 0 !important;
+                inset-inline-start: 0 !important;
+                padding-inline: 8px !important;
+                bottom: 22px !important;
+            }
+
+            #user_chat_area #chat_form .lqd-chat-form-inputs-container {
+                min-height: 84px !important;
+            }
+
+            #user_chat_area #chat_form .lqd-chat-form-inputs-container > .relative {
+                min-height: 80px !important;
+                padding-bottom: 3px !important;
+            }
+
+            #user_chat_area #chat_form .lqd-chat-form-inputs-container > .relative > .pointer-events-none.absolute.bottom-2 {
+                bottom: 8px !important;
+                inset-inline: 8px !important;
+            }
+
+            #user_chat_area.garad-has-prompt-text .lqd-chat-form-wrap {
+                bottom: 12px !important;
+            }
+
+            #user_chat_area.conversation-not-started .lqd-chat-form-wrap {
+                bottom: 22px !important;
+            }
+
+            #user_chat_area.conversation-not-started.garad-has-prompt-text .lqd-chat-form-wrap {
+                bottom: 12px !important;
+            }
+
+            #user_chat_area #chat_form #prompt {
+                min-height: 70px !important;
+                padding-top: 14px !important;
+                padding-bottom: 36px !important;
+                padding-inline-end: 116px !important;
+            }
+
+            #user_chat_area #chat-options .garad-claude-model-menu {
+                position: fixed !important;
+                top: auto !important;
+                right: 8px !important;
+                bottom: calc(78px + env(safe-area-inset-bottom, 0px)) !important;
+                left: 8px !important;
+                width: auto !important;
+                max-width: none !important;
+            }
+        }
+    </style>
+    <script>
+        (() => {
+            let syncTimer = null;
+
+            const syncChatComposerOffset = () => {
+                const sidebar = document.querySelector('.chats-sidebar-wrap');
+                const offset = window.innerWidth > 991 && sidebar && getComputedStyle(sidebar).display !== 'none'
+                    ? sidebar.getBoundingClientRect().width
+                    : 0;
+
+                document.documentElement.style.setProperty('--garad-chat-left', `${Math.max(0, offset)}px`);
+            };
+
+            const syncPromptFilledState = () => {
+                const prompt = document.getElementById('prompt');
+                const chatArea = document.getElementById('user_chat_area');
+                if (!chatArea) return;
+
+                const hasValue = !!(prompt && prompt.value.trim() !== '');
+                chatArea.classList.toggle('garad-has-prompt-text', hasValue);
+            };
+
+            const clampPromptHeight = () => {
+                const prompt = document.getElementById('prompt');
+                if (!prompt) return;
+
+                const minHeight = 58;
+                const maxHeight = 210;
+
+                prompt.style.height = 'auto';
+                prompt.style.height = `${Math.min(Math.max(prompt.scrollHeight, minHeight), maxHeight)}px`;
+                prompt.style.overflowY = prompt.scrollHeight > maxHeight ? 'auto' : 'hidden';
+                syncPromptFilledState();
+
+                if (!prompt.dataset.garadStableComposerBound) {
+                    prompt.dataset.garadStableComposerBound = '1';
+                    prompt.addEventListener('input', clampPromptHeight, { passive: true });
+                }
+            };
+
+            const resetPromptHeightIfEmpty = () => {
+                const prompt = document.getElementById('prompt');
+                if (!prompt || prompt.value.trim() !== '') return;
+
+                prompt.style.height = '58px';
+                prompt.style.overflowY = 'hidden';
+                prompt.dispatchEvent(new Event('input', { bubbles: true }));
+                syncPromptFilledState();
+            };
+
+            const ensureComposerModelControl = () => {
+                const chatOptions = document.querySelector('#chat_form #chat-options');
+                if (!chatOptions) return;
+
+                const existing = chatOptions.querySelector('.garad-composer-model-control');
+                if (!existing) {
+                    const headerPicker = document.querySelector('.lqd-chat-pro-header .garad-claude-model-picker');
+                    if (headerPicker) {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'garad-composer-model-control pointer-events-auto';
+                        wrapper.appendChild(headerPicker);
+                        chatOptions.prepend(wrapper);
+                    }
+                }
+            };
+
+            const syncComposerRuntime = () => {
+                window.clearTimeout(syncTimer);
+                syncTimer = window.setTimeout(() => {
+                    syncChatComposerOffset();
+                    ensureComposerModelControl();
+                    clampPromptHeight();
+                    syncPromptFilledState();
+                }, 60);
+            };
+
+            const bindComposerStabilityEvents = () => {
+                document.addEventListener('click', (event) => {
+                    if (!event.target.closest('.lqd-new-chat-trigger, .garad-sidebar-new-chat, .garad-rail-new-chat-btn')) return;
+
+                    window.setTimeout(() => {
+                        resetPromptHeightIfEmpty();
+                        syncComposerRuntime();
+                    }, 90);
+                }, true);
+
+                window.addEventListener('chat-created', () => {
+                    window.setTimeout(() => {
+                        resetPromptHeightIfEmpty();
+                        syncComposerRuntime();
+                    }, 90);
+                });
+
+                document.addEventListener('chat:response-complete', syncComposerRuntime);
+
+                const observerTarget = document.getElementById('user_chat_area') || document.body;
+                if (observerTarget) {
+                    new MutationObserver(syncComposerRuntime).observe(observerTarget, {
+                        childList: true,
+                        subtree: true,
+                    });
+                }
+            };
+
+            window.addEventListener('resize', syncComposerRuntime, { passive: true });
+            window.addEventListener('load', () => {
+                syncComposerRuntime();
+                resetPromptHeightIfEmpty();
+            }, { once: true });
+
+            bindComposerStabilityEvents();
+            setTimeout(syncComposerRuntime, 0);
+            setTimeout(syncComposerRuntime, 500);
+        })();
+    </script>
     @if ($category?->slug == 'ai_webchat' && count($list) === 0)
         <input
             id="createChatUrl"
             type="hidden"
             name="createChatUrl"
-            value="/dashboard/user/openai/webchat/start-new-chat"
+            value="{{ url('/dashboard/user/openai/webchat/start-new-chat') }}"
         />
     @endif
     <input
         id="openChatAreaContainerUrl"
         type="hidden"
         name="openChatAreaContainerUrl"
-        value="@yield('openChatAreaContainerUrl', '/dashboard/user/openai/chat/open-chat-area-container')"
+        value="{{ url('/dashboard/user/openai/chat/open-chat-area-container') }}"
     />
+    <script>
+        window.garadAppBase = @json(url('/'));
+        window.garadResolveUrl = function (input) {
+            const value = typeof input === 'string' ? input : input?.url;
+            if (!value || !value.startsWith('/dashboard')) {
+                return input;
+            }
+
+            const resolved = `${window.garadAppBase}${value}`;
+            return typeof input === 'string' ? resolved : new Request(resolved, input);
+        };
+
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (input, init) => nativeFetch(window.garadResolveUrl(input), init);
+
+        if (window.jQuery) {
+            window.jQuery.ajaxPrefilter((options) => {
+                if (typeof options.url === 'string' && options.url.startsWith('/dashboard')) {
+                    options.url = `${window.garadAppBase}${options.url}`;
+                }
+            });
+        }
+    </script>
 
     {!! adsense_chat_pro_top_header_728x90() !!}
 
@@ -1147,6 +2567,19 @@
                     @endif
                 @endif
             </div>
+
+            @auth
+                <nav class="garad-rail-nav" aria-label="{{ __('Quick navigation') }}">
+                    <a href="{{ route('dashboard.user.openai.chat.pro.workspace.library') }}" title="{{ __('Library') }}"><x-tabler-library class="size-5" /></a>
+                    <a href="{{ route('dashboard.user.openai.chat.pro.scheduled.index') }}" title="{{ __('Scheduled') }}"><x-tabler-clock-bolt class="size-5" /></a>
+                    <a href="{{ route('dashboard.user.openai.chat.pro.workspace.agents') }}" title="{{ __('Agents') }}"><x-tabler-sparkles class="size-5" /></a>
+                    <a href="{{ route('dashboard.user.openai.chat.pro.workspace.code') }}" title="{{ __('Garad Code') }}"><x-tabler-code class="size-5" /></a>
+                </nav>
+                <div class="garad-rail-spacer"></div>
+                <a class="garad-rail-profile" href="{{ route('dashboard.user.index') }}" title="{{ auth()->user()?->fullName() ?? __('Profile') }}">
+                    <img src="{{ $chatSidebarAvatarUrl }}" alt="" onerror="this.onerror=null;this.src='{{ custom_theme_url('/assets/img/auth/default-avatar.png') }}';">
+                </a>
+            @endauth
         </div>
 
         <div class="grow px-2 md:px-5 lg:px-0">
@@ -1176,6 +2609,42 @@
                         @click.outside="(e) => { if (window.innerWidth < 992) { return !sidebarLocked && !sidebarHidden && !isShowRecent(e?.target) && (sidebarHidden = true); } }"
                     >
                         @auth
+                            <div class="garad-sidebar-brand-row hidden lg:flex">
+                                <x-header-logo class="garad-sidebar-brand" aria-label="Garad AI" />
+                                <button
+                                    class="garad-sidebar-search-toggle"
+                                    type="button"
+                                    title="{{ __('Search chats') }}"
+                                    aria-label="{{ __('Search chats') }}"
+                                    onclick="document.getElementById('garad-sidebar-search-popover')?.classList.toggle('is-open'); document.getElementById('chat_search_word')?.focus();"
+                                >
+                                    <x-tabler-search class="size-[17px]" />
+                                </button>
+                                <x-button
+                                    class="garad-sidebar-collapse-btn"
+                                    variant="none"
+                                    size="none"
+                                    href="#"
+                                    @click.prevent="toggleSidebarHidden()"
+                                    title="{{ __('Hide Recent') }}"
+                                >
+                                    <svg
+                                        width="18"
+                                        height="18"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                                        <path d="M9 4v16"></path>
+                                    </svg>
+                                </x-button>
+                            </div>
+
                             <div class="garad-sidebar-topbar hidden lg:flex">
                                 @if (!view()->hasSection('chat_sidebar_actions'))
                                     @if (isset($category) && $category?->slug == 'ai_pdf')
@@ -1209,37 +2678,41 @@
                                 @else
                                     <div class="min-w-0 grow"></div>
                                 @endif
+                            </div>
 
+                            <div class="garad-sidebar-search-popover" id="garad-sidebar-search-popover">
+                                <form class="chats-search-form relative grow" action="#">
+                                    <x-forms.input
+                                        class="navbar-search-input peer ps-9"
+                                        id="chat_search_word"
+                                        data-category-id="{{ $category?->id }}"
+                                        data-website-url="chatpro"
+                                        type="search"
+                                        onkeydown="return event.key != 'Enter';"
+                                        placeholder="{{ __('Search chats') }}"
+                                        aria-label="{{ __('Search in conversations') }}"
+                                    />
+                                    <x-tabler-search class="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 opacity-60" />
+                                </form>
                                 <x-button
-                                    class="garad-sidebar-collapse-btn"
-                                    variant="none"
-                                    size="none"
-                                    href="#"
-                                    @click.prevent="toggleSidebarHidden()"
-                                    title="{{ __('Hide Recent') }}"
+                                    class="lqd-chat-clear-all aspect-square min-w-8 shrink-0 bg-foreground/5 text-foreground"
+                                    size="sm"
+                                    hover-variant="danger"
+                                    href="javascript:void(0);"
+                                    title="{{ __('Delete all chats') }}"
+                                    onclick="{!! $app_is_demo ? 'return toastr.info(\'' . __('This feature is disabled in Demo version.') . '\')' : 'return deleteAllConv(\'' . ($category?->id ?? 0) . '\')' !!}"
                                 >
-                                    <svg
-                                        width="18"
-                                        height="18"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        stroke="currentColor"
-                                        stroke-width="1.7"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-                                        <path d="M9 4v16"></path>
-                                    </svg>
+                                    <x-tabler-trash class="size-4" />
                                 </x-button>
                             </div>
                         @endauth
 
+                        @include('ai-chat-pro::includes.garad-primary-nav')
+
                         @if (view()->hasSection('chat_sidebar'))
                             @yield('chat_sidebar')
                         @else
-                            @include('panel.user.openai_chat.components.chat_sidebar', [
+                            @include('ai-chat-pro::includes.chat_sidebar', [
                                 'website_url' => 'chatpro',
                             ])
                         @endif
@@ -1460,7 +2933,7 @@
     </div>
 
     <span id="thinking-text" class="text-sm text-gray-400">
-        Understanding your request...
+        Thinking through your request…
     </span>
 
 </div>
@@ -1854,6 +3327,7 @@ class="chat-content prose relative w-full max-w-[760px] px-8 py-6 indent-0 font-
 @endsection
 
 @push('script')
+    <script defer src="{{ asset('/vendor/garad-chat-pro-2/chat-pro-2.js') }}?v=2.9.0"></script>
     <link
         rel="stylesheet"
         href="{{ custom_theme_url('/assets/libs/prism/prism.css') }}"
@@ -1874,6 +3348,116 @@ class="chat-content prose relative w-full max-w-[760px] px-8 py-6 indent-0 font-
     <script src="{{ custom_theme_url('/assets/libs/fslightbox/fslightbox.js') }}"></script>
 
     @include('panel.user.openai_chat.components.chat_js')
+
+    <script>
+        (() => {
+            const canUpload = @json(auth()->check() && ! $app_is_demo);
+            const isDemo = @json((bool) $app_is_demo);
+            const allowedExtensions = new Set([
+                'png','jpg','jpeg','webp','gif','bmp',
+                'pdf','doc','docx','xls','xlsx','csv','txt','json','xml','html','htm','md','ppt','pptx',
+                'mp3','mp4','mpeg','mpga','m4a','wav','webm','ogg','flac','aac','mov','mkv','avi','m4v'
+            ]);
+
+            window.garadComposerAction = (type) => {
+                const prompt = document.getElementById('prompt');
+                if (type === 'upload') {
+                    if (!canUpload) {
+                        if (isDemo) {
+                            toastr.info(@json(__('This feature is disabled in Demo version.')));
+                        } else {
+                            toastr.warning(@json(__('Login to upload a document or image.')));
+                        }
+                        return;
+                    }
+                    const input = document.getElementById('selectImageInput');
+                    if (input) input.click();
+                    return;
+                }
+
+                if (!prompt) return;
+
+                const starters = {
+                    image: @json(__('Create an image of ')),
+                    video: @json(__('Create a video of ')),
+                    pdf: @json(__('Create a downloadable PDF about ')),
+                    word: @json(__('Create a downloadable Word document about ')),
+                    excel: @json(__('Create an Excel spreadsheet for ')),
+                    presentation: @json(__('Create a presentation about ')),
+                };
+
+                if (!prompt.value.trim() && starters[type]) {
+                    prompt.value = starters[type];
+                    prompt.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+
+                prompt.focus();
+                prompt.setSelectionRange?.(prompt.value.length, prompt.value.length);
+            };
+
+            // Chat Pro accepts all of the formats supported by GaradMultimodalService.
+            // Keep the original validator as a fallback for any unknown future format.
+            if (typeof window.isAllowedFileType === 'function' && !window.isAllowedFileType.__garadUnified) {
+                const originalValidator = window.isAllowedFileType;
+                const unifiedValidator = (data, name) => {
+                    const cleanName = String(name || '').split('?')[0].split('#')[0];
+                    const extension = cleanName.includes('.') ? cleanName.split('.').pop().toLowerCase() : '';
+                    if (allowedExtensions.has(extension)) return true;
+                    return originalValidator(data, name);
+                };
+                unifiedValidator.__garadUnified = true;
+                window.isAllowedFileType = unifiedValidator;
+            }
+
+            // The legacy shared chat JS sends image uploads as template_type=vision.
+            // On the Chat Pro page keep the image path but route the request through
+            // chatPro so the unified attachment reader + all creation tools remain active.
+            if (typeof window.sendRequest === 'function' && !window.sendRequest.__garadUnified) {
+                const originalSendRequest = window.sendRequest;
+                const unifiedSendRequest = function(type, images, responseObj, sharedMessageUUID = null, requestOptions = {}) {
+                    const routedType = type === 'vision' ? 'chatPro' : type;
+                    return originalSendRequest.call(this, routedType, images, responseObj, sharedMessageUUID, requestOptions);
+                };
+                unifiedSendRequest.__garadUnified = true;
+                window.sendRequest = unifiedSendRequest;
+            }
+
+            const readFilesIntoComposer = (files) => {
+                if (!canUpload) {
+                    toastr.warning(isDemo ? @json(__('This feature is disabled in Demo version.')) : @json(__('Login to upload a document or image.')));
+                    return;
+                }
+                if (typeof window.addFileToChat !== 'function') return;
+                Array.from(files || []).forEach(file => {
+                    const extension = String(file.name || '').split('.').pop().toLowerCase();
+                    if (!allowedExtensions.has(extension) && !String(file.type || '').startsWith('image/')) {
+                        toastr.error(@json(__('File is not supported.')));
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = event => window.addFileToChat({
+                        file,
+                        data: event.target.result,
+                        name: file.name || `upload-${Date.now()}`,
+                    });
+                    reader.readAsDataURL(file);
+                });
+            };
+
+            const composer = document.querySelector('.garad-chat-composer');
+            if (composer) {
+                ['dragenter', 'dragover'].forEach(eventName => composer.addEventListener(eventName, event => {
+                    event.preventDefault();
+                    composer.classList.add('is-dragging');
+                }));
+                ['dragleave', 'drop'].forEach(eventName => composer.addEventListener(eventName, event => {
+                    event.preventDefault();
+                    composer.classList.remove('is-dragging');
+                }));
+                composer.addEventListener('drop', event => readFilesIntoComposer(event.dataTransfer?.files));
+            }
+        })();
+    </script>
 
     @if ($category?->slug !== 'ai_pdf')
         <script>
@@ -1978,10 +3562,11 @@ class="chat-content prose relative w-full max-w-[760px] px-8 py-6 indent-0 font-
                                 bubbleEl,
                                 suggestionsHandled
                             } = e.detail;
-                            if (!messageId || !bubbleEl || suggestionsHandled) return;
+                            const normalizedMessageId = `${messageId ?? ''}`.trim();
+                            if (!normalizedMessageId || normalizedMessageId === 'null' || normalizedMessageId === 'undefined' || !bubbleEl || suggestionsHandled) return;
 
                             try {
-                                const response = await fetch(`/dashboard/user/openai/chat/pro/message-suggestions/${messageId}`);
+                                const response = await fetch(`${window.garadAppBase}/dashboard/user/openai/chat/pro/message-suggestions/${normalizedMessageId}`);
                                 const data = await response.json();
 
                                 if (data?.suggestions?.length) {

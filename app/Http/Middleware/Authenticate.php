@@ -24,10 +24,13 @@ class Authenticate extends Middleware
 
         // Handle 2FA check
         if (Google2FA::isActivated() && ! session()->has('save_login_2fa')) {
+            $remember = Auth::guard('web')->viaRemember()
+                || $request->session()->boolean('garad_remember_login');
             Auth::logout();
 
             // Store only ID, not full user object (lighter in session)
             session()->put('user_id', $user->getAuthIdentifier());
+            session()->put('garad_remember_login', $remember);
 
             return redirect()->route('2fa.login');
         }

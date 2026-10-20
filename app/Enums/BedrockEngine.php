@@ -16,8 +16,8 @@ enum BedrockEngine: string implements Contracts\WithStringBackedEnum
     case CLAUDE_21 = 'anthropic.claude-v2:1';
     case CLAUDE_2 = 'anthropic.claude-v2';
     case CLAUDE_1 = 'anthropic.claude-instant-v1';
-    case CLAUDE_3_SONNET = 'anthropic.claude-3-sonnet-20240229-v1:0';
-    case CLAUDE_3_HAIKU = 'anthropic.claude-3-haiku-20240307-v1:0';
+    case CLAUDE_SONNET_5_5 = 'anthropic.claude-sonnet-5-5';
+    case CLAUDE_HAIKU_4_5 = 'anthropic.claude-haiku-4-5-20251001-v1:0';
     case STABLE_DIFFUSION_1 = 'stability.stable-diffusion-xl-v1';
 
     public function label(): string
@@ -27,8 +27,8 @@ enum BedrockEngine: string implements Contracts\WithStringBackedEnum
             self::CLAUDE_21          => __('Claude 2.1'),
             self::CLAUDE_2           => __('Claude 2'),
             self::CLAUDE_1           => __('Claude 1'),
-            self::CLAUDE_3_SONNET    => __('Claude 3 Sonnet'),
-            self::CLAUDE_3_HAIKU     => __('Claude 3 Haiku'),
+            self::CLAUDE_SONNET_5_5  => __('Claude Sonnet 5.5'),
+            self::CLAUDE_HAIKU_4_5   => __('Claude Haiku 4.5'),
             self::STABLE_DIFFUSION_1 => __('SDXL 1.0'),
         };
     }

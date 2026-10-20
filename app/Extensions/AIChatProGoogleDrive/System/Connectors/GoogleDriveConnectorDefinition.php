@@ -177,27 +177,20 @@ class GoogleDriveConnectorDefinition implements ConnectorDefinition
     {
         $options = [];
 
-        try {
-            $drive = $this->clientFactory->make($connector);
-            $listResult = $drive->files->listFiles([
-                'q'        => "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-                'pageSize' => 50,
-                'fields'   => 'files(id,name,modifiedTime)',
-                'orderBy'  => 'name',
-            ]);
+        $drive = $this->clientFactory->make($connector);
+        $listResult = $drive->files->listFiles([
+            'q'        => "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+            'pageSize' => 50,
+            'fields'   => 'files(id,name,modifiedTime)',
+            'orderBy'  => 'name',
+        ]);
 
-            foreach ($listResult->getFiles() ?? [] as $folder) {
-                $options[] = [
-                    'id'   => (string) $folder->getId(),
-                    'name' => (string) $folder->getName(),
-                    'meta' => '',
-                ];
-            }
-        } catch (Throwable $exception) {
-            Log::warning('[connectors] Google Drive accessOptions failed', [
-                'connector_id' => $connector->id,
-                'message'      => $exception->getMessage(),
-            ]);
+        foreach ($listResult->getFiles() ?? [] as $folder) {
+            $options[] = [
+                'id'   => (string) $folder->getId(),
+                'name' => (string) $folder->getName(),
+                'meta' => '',
+            ];
         }
 
         return [
