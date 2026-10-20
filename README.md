@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/src/assets/garad-ai-wordmark.png" alt="Garad AI" width="320">
+</p>
+
 # Garad AI
 
 Garad AI is one private repository containing the Laravel application and the
@@ -9,18 +13,53 @@ API base URL.
 > development database, user records, credentials, or prebuilt dependency
 > folders. Each engineer must create a local `.env` and development database.
 
-## Project structure
+## Technology stack
 
-| Path | Purpose |
+| Area | Technology |
 | --- | --- |
-| `app/`, `routes/`, `resources/`, `database/` | Laravel backend, routes, migrations, and application seeders |
-| `frontend/src/` | React/Vite Chat Pro source |
-| `frontend/package.json`, `frontend/pnpm-lock.yaml` | Separate frontend dependency manifest and pinned lockfile |
-| `frontend/vite.config.ts`, `frontend/tsconfig.json` | Frontend build and TypeScript configuration |
-| `public/garad-ai-chat-pro/dist/` | Generated Chat Pro build; create it locally and do not commit it |
-| `tests/` | Laravel feature and unit tests |
-| `composer.json`, `composer.lock` | Backend PHP dependencies |
-| root `package.json`, `package-lock.json` | Existing Laravel asset-build tooling and convenience commands |
+| Backend framework | Laravel 10 (`laravel/framework` `^10.0`) |
+| Backend language | PHP `^8.2` |
+| Frontend | React 19 with Vite 8 |
+| Frontend language | TypeScript 5 |
+| Database | MySQL or MariaDB; SQLite is used by the automated tests |
+| Backend dependencies | Composer, pinned by `composer.lock` |
+| Frontend dependencies | pnpm, pinned by `frontend/pnpm-lock.yaml` |
+| Laravel asset tooling | npm, pinned by the root `package-lock.json` |
+
+## Repository structure
+
+```text
+.
+├── app/                 Laravel application, extensions, services, models
+├── bootstrap/            Laravel bootstrap and cache directory
+├── config/               Laravel and integration configuration
+├── database/
+│   ├── migrations/       Database schema migrations
+│   └── seeders/          Application catalog and permission seeders
+├── docs/                 Project and engineering documentation
+├── frontend/
+│   ├── src/              React/TypeScript Chat Pro source and assets
+│   ├── package.json      Frontend dependency manifest
+│   ├── pnpm-lock.yaml    Pinned frontend dependency tree
+│   ├── tsconfig.json     TypeScript configuration
+│   └── vite.config.ts    Frontend build configuration
+├── lang/                 Laravel translations
+├── packages/             Local Composer packages
+├── public/               Laravel web root and required runtime assets
+├── resources/
+│   ├── dev_tools/        Static catalog SQL used by application setup
+│   └── views/            Laravel Blade templates and legacy assets
+├── routes/               Web, API, panel, and webhook routes
+├── scripts/              Project maintenance scripts
+├── tests/                Laravel feature and unit tests
+├── .env.example          Sanitized local environment template
+├── artisan               Laravel command-line entry point
+├── composer.json         Backend dependencies and commands
+├── composer.lock         Pinned backend dependency tree
+├── package.json          Root asset tooling and convenience scripts
+├── package-lock.json     Pinned root npm dependency tree
+└── README.md             Setup and development guide
+```
 
 Frontend media in `frontend/src/assets/` is tracked directly in Git. It does not
 require Git LFS or a separate asset download.
@@ -28,6 +67,17 @@ require Git LFS or a separate asset download.
 The Laravel route `/agents` serves Chat Pro from its generated build and
 injects the authenticated API URL. Do not create a physical
 `public/agents` directory; it would shadow that route.
+
+## Local data and secrets
+
+The actual local `.env`, database exports, private uploads, logs, caches,
+dependency directories, and generated builds are intentionally excluded from
+Git. They may contain application keys, provider credentials, user records,
+conversation content, or private documents. Do not add these files to a commit
+or upload them to GitHub. Use `.env.example` to create a new, private local
+configuration and use migrations to build a fresh development schema. Populate
+it only with synthetic or explicitly anonymized data. Obtain any needed
+development credentials through the team-approved secrets manager.
 
 ## Requirements
 
@@ -158,6 +208,22 @@ can make existing encrypted application data unreadable.
 
 Run migrations only against the new development database. Never use
 `migrate:fresh`, `db:wipe`, or a production/live database as part of setup.
+
+### Import an approved sanitized snapshot (optional)
+
+This repository does not contain a database snapshot. If the team separately
+provides an approved, sanitized development export, create a new empty database
+first and confirm its name before importing. In phpMyAdmin, select that
+development database, choose **Import**, and select the sanitized `.sql` file.
+Alternatively, from Command Prompt (not PowerShell), use the MySQL client:
+
+```bat
+"C:\xampp\mysql\bin\mysql.exe" --user=root --password garad_ai_dev < "C:\secure\garad_ai_dev_sanitized.sql"
+```
+
+Replace the database and file paths with the verified development values. The
+client prompts for the local database password. Never import a live database,
+user-data dump, or unknown snapshot into an existing/shared database.
 
 ## Storage, cache, and uploads
 
