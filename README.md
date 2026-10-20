@@ -74,6 +74,19 @@ Install the backend dependencies and the two separate JavaScript dependency
 sets:
 
 ```powershell
+# Laravel package discovery needs the writable view/cache directories first.
+$directories = @(
+    'storage\app\private',
+    'storage\app\public',
+    'storage\framework\cache\data',
+    'storage\framework\sessions',
+    'storage\framework\views',
+    'storage\logs'
+)
+foreach ($directory in $directories) {
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+}
+
 composer install
 npm ci
 corepack pnpm --dir frontend install --frozen-lockfile
@@ -146,6 +159,39 @@ can make existing encrypted application data unreadable.
 Run migrations only against the new development database. Never use
 `migrate:fresh`, `db:wipe`, or a production/live database as part of setup.
 
+## Storage, cache, and uploads
+
+Laravel needs writable local directories for compiled views, file sessions,
+logs, cache data, and local uploads. From the repository root, create any
+missing directories without replacing existing contents:
+
+```powershell
+$directories = @(
+    'bootstrap\cache',
+    'storage\app\private',
+    'storage\app\public',
+    'storage\framework\cache\data',
+    'storage\framework\sessions',
+    'storage\framework\views',
+    'storage\logs'
+)
+foreach ($directory in $directories) {
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+}
+```
+
+Ensure the Windows account running Apache/PHP can write to `storage/` and
+`bootstrap/cache/`. Do not grant broad write access to the whole repository.
+If the app uses Laravel's public disk, create the public storage link once:
+
+```powershell
+C:\xampp\php\php.exe artisan storage:link
+```
+
+If `public\storage` already exists, inspect it first; do not overwrite an
+existing directory or link. Uploaded files and local storage contents are not
+part of the repository and should be recreated locally with synthetic data.
+
 ### Optional application seed data
 
 There is no sanitized demo-user or customer-data fixture in this repository.
@@ -160,6 +206,7 @@ C:\xampp\php\php.exe artisan db:seed
 Do not run this against an existing or shared database without reviewing its
 effects first. It is safe to skip seeding during initial setup; create a local
 account through the application's supported installation or registration flow.
+No demo password or preloaded customer data is provided.
 
 ## Build and run
 
@@ -176,6 +223,7 @@ npm run build
 For the standard XAMPP URL, start Apache in the XAMPP Control Panel and open:
 
 - Application: `http://localhost/garad.ai/public/`
+- Chat Pro chat: `http://localhost/garad.ai/public/chat`
 - Chat Pro: `http://localhost/garad.ai/public/agents`
 
 The Apache configuration must allow `.htaccess` overrides and `mod_rewrite`.
@@ -188,6 +236,12 @@ C:\xampp\php\php.exe artisan serve --host=127.0.0.1 --port=8000
 
 Open `http://127.0.0.1:8000/`. Do not run Apache and `artisan serve` on the same
 port.
+
+On a fresh checkout, the application redirects to `/license` until an
+authorized Garad AI/Liquid Themes license is activated. Use the license
+assigned to your development installation; activation requires access to the
+license provider. The status is stored in ignored local storage, not in Git.
+Do not copy a teammate's local license state or add a license key to `.env`.
 
 ### Frontend development server (optional)
 
@@ -243,17 +297,40 @@ credentials, but features that contact external providers require the
 appropriate engineer-owned development credentials. Depending on the feature,
 these may include:
 
-- AI providers such as OpenAI (`OPENAI_API_KEY`), Gemini
-  (`GEMINI_API_KEY`), or xAI.
-- OAuth integrations such as Google, Microsoft, or other configured services.
-- Payment gateways, mail delivery, object storage (AWS/S3), and realtime
-  broadcasting (Pusher/Ably).
+- AI providers: OpenAI (`OPENAI_API_KEY`, `OPENAI_ORGANIZATION`) and Gemini
+  (`GEMINI_API_KEY`). AI model/provider settings may also be stored in the
+  application's local database. The current xAI config reads the OpenAI key
+  variable.
+- Social sign-in and OAuth: GitHub (`GITHUB_CLIENT_ID`,
+  `GITHUB_CLIENT_SECRET`), Google (`GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET`), Facebook (`FACEBOOK_CLIENT_ID`,
+  `FACEBOOK_CLIENT_SECRET`), Apple (`APPLE_BUNDLE_ID`), and reCAPTCHA
+  (`RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY`).
+- Email: local logging is the default. Mailgun uses `MAILGUN_DOMAIN` and
+  `MAILGUN_SECRET`; Postmark uses `POSTMARK_TOKEN`; SMTP requires the `MAIL_*`
+  settings.
+- Object storage: S3-compatible storage uses `AWS_ACCESS_KEY_ID`,
+  `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`, and `AWS_BUCKET`.
+- Realtime: Pusher uses `PUSHER_APP_ID`, `PUSHER_APP_KEY`,
+  `PUSHER_APP_SECRET`, and related `PUSHER_*` host/cluster settings. Ably or
+  other connector configuration may instead be stored in the local app.
+- Stripe uses `STRIPE_KEY`, `STRIPE_SECRET`, and `STRIPE_WEBHOOK_SECRET`.
+  PayPal sandbox uses `PAYPAL_SANDBOX_CLIENT_ID` and
+  `PAYPAL_SANDBOX_CLIENT_SECRET`. Other payment providers and social connectors
+  may use credentials saved in the application's settings or connector tables,
+  rather than `.env`.
 
 Configure only the credentials needed for the feature being developed in the
 local `.env` or the provider's documented secure configuration. Never commit
 secrets, ask teammates to share personal tokens, or enable real payment
-processing in local development. Without the corresponding credentials, those
-external features will not complete live requests.
+processing in local development. Obtain individual development/sandbox
+credentials through the team-approved secrets manager or directly from each
+provider's developer console. Share access through that approved system, never
+through Git, source files, chat, or a production `.env`. Without the
+corresponding credentials, provider-backed live requests, OAuth callbacks,
+delivery, storage, or realtime features cannot be fully exercised.
+In addition, the application license must be activated through `/license`
+before the protected application routes leave the installer screen.
 
 ## Troubleshooting
 
@@ -281,11 +358,20 @@ external features will not complete live requests.
 
 ## Clean-install verification status
 
-The repository's source tree and frontend build have been validated in the
-maintainer checkout, and focused Laravel tests have been run there. A fresh
-Windows/XAMPP installation against a newly created empty database has **not**
-been verified in this environment: Composer is not available on its `PATH`,
-and the existing local database and `.env` were deliberately left untouched.
-Treat a clean install as unverified until a teammate follows the setup above
-with Composer installed and confirms migrations and the application boot on a
-new local development database.
+A detached clean worktree was validated on Windows with PHP 8.2.12. Composer
+dependencies installed from `composer.lock` after creating Laravel's required
+runtime directories; root `npm ci` and the frontend frozen-lockfile install
+passed; the TypeScript check and both production builds passed; and all
+migrations completed against a new, disposable SQLite database. The focused
+Agent, sharing/mentions, workflow approval/state, and profile tests passed
+(24 tests, 264 assertions; one PHPUnit deprecation notice). The test base class
+disables only the external license-status middleware, so automated tests do
+not require a private domain license.
+
+The existing MySQL database and `.env` were not used or changed. A fresh
+XAMPP/MySQL migration run has not been performed. HTTP requests to `/agents`
+and `/chat` returned the license activation screen because no authorized
+development license was supplied; the React application itself and
+authenticated/provider-backed API calls therefore still need verification
+after license activation and sign-in. External provider credentials are
+optional for setup but required to exercise their respective integrations.

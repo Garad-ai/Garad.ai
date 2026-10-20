@@ -47,6 +47,7 @@
 *.log
 /app/Extensions/AIChatPro/garad_garad_magicai.sql
 /app/Extensions.zip
+/app/Extensions/AIChatPro (3).zip
 
 # Local bundles and old deployment snapshots
 /downloads/
