@@ -38,6 +38,10 @@
 /*.sql.*
 /*.dump
 /*.bak
+*.before-*
+*.backup-*
+*.broken-*
+*.save
 /error_log
 /*-errors.txt
 *.log
