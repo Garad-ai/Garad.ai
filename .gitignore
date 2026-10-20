@@ -14,6 +14,7 @@
 !/public/themes/default/assets/libs/apexcharts/dist/
 /public/themes/default/assets/libs/apexcharts/dist/*
 !/public/themes/default/assets/libs/apexcharts/dist/apexcharts.min.js
+!/public/themes/default/assets/libs/apexcharts/dist/apexcharts.amd.js.LICENSE.txt
 !/public/themes/default/assets/libs/jscolorpicker/dist/
 /public/themes/default/assets/libs/jscolorpicker/dist/*
 !/public/themes/default/assets/libs/jscolorpicker/dist/colorpicker.css
